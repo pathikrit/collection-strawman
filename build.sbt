@@ -3,7 +3,8 @@ organization in ThisBuild := "ch.epfl.scala"
 version in ThisBuild := "0.2.0-SNAPSHOT"
 
 resolvers in ThisBuild += "scala-pr" at "https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots"
-scalaVersion in ThisBuild := "2.12.2-ebe1180-SNAPSHOT" // from https://github.com/scala/scala/pull/5742
+//scalaVersion in ThisBuild := "2.12.2-ebe1180-SNAPSHOT" // from https://github.com/scala/scala/pull/5742
+scalaVersion in ThisBuild := "2.12.0"
 scalaBinaryVersion in ThisBuild := "2.12"
 
 scalacOptions in ThisBuild ++=
@@ -22,7 +23,7 @@ val collections =
       libraryDependencies ++= Seq(
         "org.scala-lang.modules" %% "scala-java8-compat" % "0.8.0",
         "com.novocode" % "junit-interface" % "0.11" % Test,
-        "org.specs2" %% "specs2" % "3.8.9" % Test
+        "org.scalatest" %% "scalatest" % "3.0.1" % Test
       ),
       pomExtra :=
         <developers>
