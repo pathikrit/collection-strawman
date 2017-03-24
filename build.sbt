@@ -21,7 +21,8 @@ val collections =
       name := "collection-strawman",
       libraryDependencies ++= Seq(
         "org.scala-lang.modules" %% "scala-java8-compat" % "0.8.0",
-        "com.novocode" % "junit-interface" % "0.11" % Test
+        "com.novocode" % "junit-interface" % "0.11" % Test,
+        "org.specs2" %% "specs2" % "3.8.9" % Test
       ),
       pomExtra :=
         <developers>
