@@ -16,6 +16,7 @@ class ArrayDequeSpec extends FlatSpec {
       //println(s"Before: [buffer1=${buffer}; buffer2=${buffer2}]")
       assert(f(buffer) === f(buffer2))
       assert(buffer === buffer2)
+      assert(buffer.reverse === buffer2.reverse)
     }
 
     apply(_.append(1, 2, 3, 4, 5))

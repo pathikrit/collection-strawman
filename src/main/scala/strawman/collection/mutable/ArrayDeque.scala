@@ -67,7 +67,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     this
   }
 
-  @inline private[this] def appendAssumingCapacity(elem: A) = {
+  @inline private[ArrayDeque] def appendAssumingCapacity(elem: A) = {
     array(end) = elem.asInstanceOf[AnyRef]
     end = (end + 1) & mask
   }
@@ -155,6 +155,12 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
       array(end) = null
       Some(elem.asInstanceOf[A])
     }
+  }
+
+  override def reverse = {
+    val r = new ArrayDeque[A](initialSize = size)
+    indices.foreach({i => r.appendAssumingCapacity(this(size - i - 1))})
+    r
   }
 
   override def length = (end - start) & mask
