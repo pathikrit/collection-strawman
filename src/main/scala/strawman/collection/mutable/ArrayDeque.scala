@@ -69,9 +69,6 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     this
   }
 
-  override def ++=:(xs: TraversableOnce[A]) = //TODO: Improve this - foldRight is expensive
-    xs.foldRight(this)((x, coll) => x +=: coll).asInstanceOf[this.type]
-
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
     ArrayDeque.checkIndex(idx, this)
     val src = elems.toBuffer
@@ -96,36 +93,26 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     if (count <= 0) return
     val removals = (size - idx) min count
     // If we are removing more than half the elements, its cheaper to start over
-    // Else, either move the prefix right or the suffix left - whichever is shorter
+    // Else, choose the shorter: either move the prefix (0 until (idx + removals) right OR the suffix (idx to size) left
     if (2*removals >= size) {
       val array2 = ArrayDeque.alloc(size - removals)
       copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
       copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = size)
       set(array = array2, start = 0, end = size - removals)
     } else if (size - idx <= idx + removals) {
-      /* We are doing this but without a if and foreach but 2 while loops for perf reasons:
-        (idx until size) foreach {i =>
-          val elem = if (i + removals < size) get(i + removals) else null
-          set(i, elem)
-        }
-      */
       var i = idx
       while(i + removals < size) {
         set(i, get(i + removals))
+        set(i + removals, null)
         i += 1
       }
       nullIfy(from = i)
       end = (end - removals) & mask
     } else {
-      /* We are doing this but without a if and foreach but 2 while loops for perf reasons:
-        (0 until (idx + removals)).reverse foreach {i =>
-          val elem = if (i - removals < 0) null else get(i - removals)
-          set(i, elem)
-        }
-      */
       var i = idx + removals - 1
       while(i - removals >= 0) {
         set(i, get(i - removals))
+        set(i - removals, null)
         i -= 1
       }
       nullIfy(until = i + 1)
@@ -228,7 +215,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   }
 
   /**
-    * Trims the capacity of this CircularBuffer's instance to be the current size
+    * Trims the capacity of this ArrayDeque's instance to be the current size
     */
   def trimToSize(): Unit = resize(size - 1)
 
