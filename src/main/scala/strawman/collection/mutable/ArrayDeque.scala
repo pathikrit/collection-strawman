@@ -71,21 +71,21 @@ class ArrayDeque[A] private(var array: Array[Any], var start: Int, var end: Int)
 
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
     ArrayDeque.checkIndex(idx, this)
-    val src = elems.toBuffer
-    /*val finalLength = src.length + this.length
+    val srcLength = elems.size
+    val finalLength = srcLength + this.length
     // Either we resize right away or move prefix right or suffix left
     if (2*finalLength >= array.length) {
       val array2 = ArrayDeque.alloc(finalLength)
-      arrayCopy(dest = array2, srcStart = 0, destStart = 0, maxItems = idx)
-      Array.copy(src = src, srcPos = 0, dest = array2, destPos = idx, length = src.length)
-      arrayCopy(dest = array2, srcStart = idx, destStart = idx + src.length, maxItems = size)
+      copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
+      elems.copyToArray(array2, idx)
+      copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
       set(array = array2, start = 0, end = finalLength)
-    } else {*/
-    // TODO: choose to move prefix right or suffix left
-    val suffix = drop(idx)
-    end = (start + idx) & mask
-    this ++= src ++= suffix
-    /*}*/
+    } else {
+      // TODO: choose to move prefix right or suffix left
+      val suffix = drop(idx)
+      end = (start + idx) & mask
+      this ++= elems ++= suffix
+    }
   }
 
   override def remove(idx: Int, count: Int): Unit = {
