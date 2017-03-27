@@ -2,15 +2,14 @@ organization in ThisBuild := "ch.epfl.scala"
 
 version in ThisBuild := "0.2.0-SNAPSHOT"
 
-//resolvers in ThisBuild += "scala-pr" at "https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots"
-//scalaVersion in ThisBuild := "2.12.2-ebe1180-SNAPSHOT" // from https://github.com/scala/scala/pull/5742
-scalaVersion in ThisBuild := "2.12.1"
+resolvers in ThisBuild += "scala-pr" at "https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots"
+scalaVersion in ThisBuild := "2.12.2-ebe1180-SNAPSHOT" // from https://github.com/scala/scala/pull/5742
 scalaBinaryVersion in ThisBuild := "2.12"
 
 scalacOptions in ThisBuild ++=
   Seq("-deprecation", "-unchecked", "-language:higherKinds")
 
-//testOptions in ThisBuild += Tests.Argument(TestFrameworks.JUnit, "-q", "-v", "-s", "-a")
+testOptions in ThisBuild += Tests.Argument(TestFrameworks.JUnit, "-q", "-v", "-s", "-a")
 
 fork in Test in ThisBuild := true
 
