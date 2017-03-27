@@ -103,17 +103,37 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
       copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = size)
       set(array = array2, start = 0, end = size - removals)
     } else if (size - idx <= idx + removals) {
-      //TODO: Instead of if in the loop, break into 2 loops
-      (idx until size) foreach {i =>
-        val elem = if (i + removals < size) get(i + removals) else null
-        set(i, elem)
+      /* We are doing this but without a if and foreach but 2 while loops for perf reasons:
+        (idx until size) foreach {i =>
+          val elem = if (i + removals < size) get(i + removals) else null
+          set(i, elem)
+        }
+      */
+      var i = idx
+      while(i + removals < size) {
+        set(i, get(i + removals))
+        i += 1
+      }
+      while(i < size) {
+        set(i, null)
+        i += 1
       }
       end = (end - removals) & mask
     } else {
-      //TODO: Instead of if in the loop, break into 2 loops
-      (0 until (idx + removals)).reverse foreach {i =>
-        val elem = if (i - removals < 0) null else get(i - removals)
-        set(i, elem)
+      /* We are doing this but without a if and foreach but 2 while loops for perf reasons:
+        (0 until (idx + removals)).reverse foreach {i =>
+          val elem = if (i - removals < 0) null else get(i - removals)
+          set(i, elem)
+        }
+      */
+      var i = idx + removals - 1
+      while(i - removals >= 0) {
+        set(i, get(i - removals))
+        i -= 1
+      }
+      while (i >= 0) {
+        set(i, null)
+        i -= 1
       }
       start = (start + removals) & mask
     }
