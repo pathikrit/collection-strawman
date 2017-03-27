@@ -157,8 +157,8 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   override def clear() = if (nonEmpty) set(array = ArrayDeque.alloc(ArrayDeque.DefaultInitialSize), start = 0, end = 0)
 
   override def slice(from: Int, until: Int) = {
-    val left = fencePost(from)
-    val right = fencePost(until)
+    val left = if (from <= 0) 0 else if (from >= size) size else from
+    val right = if (until <= 0) 0 else if (until >= size) size else until
     val len = right - left
     if (len <= 0) {
       ArrayDeque.empty[A]
@@ -219,13 +219,11 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     */
   def trimToSize(): Unit = resize(size - 1)
 
-  @inline private def fencePost(i: Int) = if (i <= 0) 0 else if (i >= size) size else i
+  @inline private[this] def get(idx: Int) = array((start + idx) & mask)
 
-  @inline private def get(idx: Int) = array((start + idx) & mask)
+  @inline private[this] def set(idx: Int, elem: AnyRef) = array((start + idx) & mask) = elem
 
-  @inline private def set(idx: Int, elem: AnyRef) = array((start + idx) & mask) = elem
-
-  @inline private def nullIfy(from: Int = 0, until: Int = size) = {
+  @inline private[this] def nullIfy(from: Int = 0, until: Int = size) = {
     var i = from
     while(i < until) {
       set(i, null)
@@ -233,7 +231,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     }
   }
 
-  @inline private def set(array: Array[AnyRef], start: Int, end: Int) = {
+  @inline private[this] def set(array: Array[AnyRef], start: Int, end: Int) = {
     this.array = array
     this.mask = array.length - 1
     assert((array.length & mask) == 0, s"Array.length must be power of 2")
@@ -241,13 +239,14 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     this.end = end
   }
 
-  private def ensureCapacity() = {
-    // We resize when we are 1 element short intentionally (and not when array is actually full)
-    // This is because when array is full (OR empty), start is equal to end (full or empty becomes harder to recognize)
+  private[this] def ensureCapacity() = {
+    /* We resize when we are 1 element short intentionally (and not when array is actually full)
+     * This is because when array is full, start is equal to end (which is also true when array is empty)
+     * Making it hard to distinguish between the full and empty case*/
     if (size == array.length - 1) resize(array.length)
   }
 
-  private def resize(len: Int) = {
+  private[this] def resize(len: Int) = {
     val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
     set(array = array2, start = 0, end = size)
   }
