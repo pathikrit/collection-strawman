@@ -1,4 +1,4 @@
-package strawman
+package scala
 package collection.mutable
 
 import scala.collection.{GenSeq, generic, mutable}
@@ -80,20 +80,26 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
     ArrayDeque.checkIndex(idx, this)
     if (elems.isEmpty) return
-    val srcLength = elems.size
-    val finalLength = srcLength + this.length
-    // Either we resize right away or move prefix right or suffix left
-    if (2*finalLength >= array.length - 1) {
-      val array2 = ArrayDeque.alloc(finalLength)
-      copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
-      elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
-      copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
-      set(array = array2, start = 0, end = finalLength)
-    } else {
-      val suffix = drop(idx)
-      end = (start + idx) & mask
-      elems.foreach(appendAssumingCapacity)
-      suffix.foreach(appendAssumingCapacity)
+    elems.sizeHintIfCheap match {
+      case srcLength if srcLength >= 0 =>
+        val finalLength = srcLength + this.length
+        // Either we resize right away or move prefix right or suffix left
+        if (2*finalLength >= array.length - 1) {
+          val array2 = ArrayDeque.alloc(finalLength)
+          copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
+          elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
+          copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
+          set(array = array2, start = 0, end = finalLength)
+        } else {
+          val suffix = drop(idx)
+          end = (start + idx) & mask
+          elems.foreach(appendAssumingCapacity)
+          suffix.foreach(appendAssumingCapacity)
+        }
+      case _ => //expensive to compute size
+        val suffix = drop(idx)
+        end = (start + idx) & mask
+        this ++= elems ++= suffix
     }
   }
 
@@ -257,7 +263,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   private[this] def ensureCapacity() = {
     /* We resize when we are 1 element short intentionally (and not when array is actually full)
      * This is because when array is full, start is equal to end (which is also true when array is empty)
-     * Making it hard to distinguish between the full and empty case*/
+     * making it hard to distinguish between the full and empty cases */
     if (size == array.length - 1) resize(array.length)
   }
 

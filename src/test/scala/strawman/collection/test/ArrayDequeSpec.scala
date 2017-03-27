@@ -1,7 +1,7 @@
 package strawman
 package collection.test
 
-import strawman.collection.mutable.ArrayDeque
+import scala.collection.mutable.ArrayDeque
 
 import org.scalatest._
 
