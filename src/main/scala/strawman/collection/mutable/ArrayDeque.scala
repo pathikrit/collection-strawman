@@ -46,12 +46,12 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   def this(initialSize: Int = ArrayDeque.defaultInitialSize) = this(ArrayDeque.alloc(initialSize), 0, 0)
 
   override def apply(idx: Int) = {
-    checkIndex(idx, this)
+    ArrayDeque.checkIndex(idx, this)
     get(idx).asInstanceOf[A]
   }
 
   override def update(idx: Int, elem: A) = {
-    checkIndex(idx, this)
+    ArrayDeque.checkIndex(idx, this)
     set(idx, elem.asInstanceOf[AnyRef])
   }
 
@@ -73,7 +73,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     xs.foldRight(this)((x, coll) => x +=: coll).asInstanceOf[this.type]
 
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
-    checkIndex(idx, this)
+    ArrayDeque.checkIndex(idx, this)
     val src = elems.toBuffer
     /*val finalLength = src.length + this.length
     // Either we resize right away or move prefix right or suffix left
@@ -92,7 +92,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   }
 
   override def remove(idx: Int, count: Int): Unit = {
-    checkIndex(idx, this)
+    ArrayDeque.checkIndex(idx, this)
     if (count <= 0) return
     val removals = (size - idx) min count
     // If we are removing more than half the elements, its cheaper to start over
@@ -187,7 +187,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   override def stringPrefix = "ArrayDeque"
 
   override def toArray[B >: A: ClassTag] = {
-    val array2 = Array.ofDim[B](size)
+    val array2 = new Array[B](size)
     arrayCopy(dest = array2, srcStart = 0, destStart = 0, maxItems = size)
     array2
   }
@@ -203,8 +203,8 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     * @param maxItems
     */
   def arrayCopy(dest: Array[_], srcStart: Int, destStart: Int, maxItems: Int): Unit = {
-    checkIndex(srcStart, this)
-    checkIndex(destStart, dest)
+    ArrayDeque.checkIndex(srcStart, this)
+    ArrayDeque.checkIndex(destStart, dest)
     val toCopy = maxItems min (size - srcStart) min (dest.length - destStart)
     if (toCopy > 0) {
       val startIdx = (start + srcStart) & mask
@@ -220,9 +220,6 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     * Trims the capacity of this CircularBuffer's instance to be the current size
     */
   def trimToSize(): Unit = resize(size - 1)
-
-  @inline private def checkIndex(idx: Int, seq: GenSeq[_]) =
-    if (!seq.isDefinedAt(idx)) throw new IndexOutOfBoundsException(idx.toString)
 
   @inline private def fencePost(i: Int) = if (i <= 0) 0 else if (i >= size) size else i
 
@@ -269,4 +266,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     val i = len max defaultInitialSize
     new Array[AnyRef](((1 << 31) >>> Integer.numberOfLeadingZeros(i)) << 1)
   }
+
+  @inline private[ArrayDeque] def checkIndex(idx: Int, seq: GenSeq[_]) =
+    if (!seq.isDefinedAt(idx)) throw new IndexOutOfBoundsException(idx.toString)
 }
