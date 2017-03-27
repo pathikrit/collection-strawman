@@ -99,8 +99,8 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     // Else, either move the prefix right or the suffix left - whichever is shorter
     if (2*removals >= size) {
       val array2 = ArrayDeque.alloc(size - removals)
-      arrayCopy(dest = array2, srcStart = 0, destStart = 0, maxItems = idx)
-      arrayCopy(dest = array2, srcStart = idx + removals - 1, destStart = idx, maxItems = size)
+      copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
+      copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = size)
       set(array = array2, start = 0, end = size - removals)
     } else if (size - idx <= idx + removals) {
       //TODO: Instead of if in the loop, break into 2 loops
@@ -164,8 +164,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     } else if (len >= size) {
       clone()
     } else {
-      val array2 = ArrayDeque.alloc(len)
-      arrayCopy(dest = array2, srcStart = left, destStart = 0, maxItems = len)
+      val array2 = copySliceToArray(srcStart = left, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = len)
       new ArrayDeque(array2, 0, len)
     }
   }
@@ -178,7 +177,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   override def grouped(n: Int) = sliding(n, n)
 
   override def copyToArray[B >: A](dest: Array[B], destStart: Int, len: Int) =
-    arrayCopy(dest = dest, srcStart = 0, destStart = destStart, maxItems = len)
+    copySliceToArray(srcStart = 0, dest = dest, destStart = destStart, maxItems = len)
 
   override def companion = ArrayDeque
 
@@ -186,11 +185,8 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   override def stringPrefix = "ArrayDeque"
 
-  override def toArray[B >: A: ClassTag] = {
-    val array2 = new Array[B](size)
-    arrayCopy(dest = array2, srcStart = 0, destStart = 0, maxItems = size)
-    array2
-  }
+  override def toArray[B >: A: ClassTag] =
+    copySliceToArray(srcStart = 0, dest = new Array[B](size), destStart = 0, maxItems = size)
 
   /**
     * This is a more general version of copyToArray - this also accepts a srcStart unlike copyToArray
@@ -202,7 +198,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     * @param destStart
     * @param maxItems
     */
-  def arrayCopy(dest: Array[_], srcStart: Int, destStart: Int, maxItems: Int): Unit = {
+  def copySliceToArray(srcStart: Int, dest: Array[_], destStart: Int, maxItems: Int): dest.type = {
     ArrayDeque.checkIndex(srcStart, this)
     ArrayDeque.checkIndex(destStart, dest)
     val toCopy = maxItems min (size - srcStart) min (dest.length - destStart)
@@ -214,6 +210,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
         Array.copy(src = array, srcPos = 0, dest = dest, destPos = block1, length = toCopy - block1)
       }
     }
+    dest
   }
 
   /**
@@ -242,8 +239,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   }
 
   private def resize(len: Int) = {
-    val array2 = ArrayDeque.alloc(len)
-    arrayCopy(dest = array2, srcStart = 0, destStart = 0, maxItems = size)
+    val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
     set(array = array2, start = 0, end = size)
   }
 }
