@@ -30,7 +30,7 @@ import scala.reflect.ClassTag
   *  @define willNotTerminateInf
   */
 @SerialVersionUID(1L)
-class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: Int)
+class ArrayDeque[A] private(var array: Array[Any], var start: Int, var end: Int)
   extends mutable.AbstractBuffer[A]
     with mutable.Buffer[A]
     with generic.GenericTraversableTemplate[A, ArrayDeque]
@@ -52,12 +52,12 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   override def update(idx: Int, elem: A) = {
     ArrayDeque.checkIndex(idx, this)
-    set(idx, elem.asInstanceOf[AnyRef])
+    set(idx, elem)
   }
 
   override def +=(elem: A) = {
     ensureCapacity()
-    array(end) = elem.asInstanceOf[AnyRef]
+    array(end) = elem
     end = (end + 1) & mask
     this
   }
@@ -65,7 +65,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   override def +=:(elem: A) = {
     ensureCapacity()
     start = (start - 1) & mask
-    array(start) = elem.asInstanceOf[AnyRef]
+    array(start) = elem
     this
   }
 
@@ -221,7 +221,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   @inline private[this] def get(idx: Int) = array((start + idx) & mask)
 
-  @inline private[this] def set(idx: Int, elem: AnyRef) = array((start + idx) & mask) = elem
+  @inline private[this] def set(idx: Int, elem: Any) = array((start + idx) & mask) = elem
 
   @inline private[this] def nullIfy(from: Int = 0, until: Int = size) = {
     var i = from
@@ -231,7 +231,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     }
   }
 
-  @inline private[this] def set(array: Array[AnyRef], start: Int, end: Int) = {
+  @inline private[this] def set(array: Array[Any], start: Int, end: Int) = {
     this.array = array
     this.mask = array.length - 1
     assert((array.length & mask) == 0, s"Array.length must be power of 2")
@@ -268,7 +268,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     */
   private[ArrayDeque] def alloc(len: Int) = {
     val i = len max DefaultInitialSize
-    new Array[AnyRef](((1 << 31) >>> Integer.numberOfLeadingZeros(i)) << 1)
+    new Array[Any](((1 << 31) >>> Integer.numberOfLeadingZeros(i)) << 1)
   }
 
   @inline private[ArrayDeque] def checkIndex(idx: Int, seq: GenSeq[_]) =
