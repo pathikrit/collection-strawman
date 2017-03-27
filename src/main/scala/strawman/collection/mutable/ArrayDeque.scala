@@ -114,10 +114,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
         set(i, get(i + removals))
         i += 1
       }
-      while(i < size) {
-        set(i, null)
-        i += 1
-      }
+      nullIfy(from = i)
       end = (end - removals) & mask
     } else {
       /* We are doing this but without a if and foreach but 2 while loops for perf reasons:
@@ -131,10 +128,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
         set(i, get(i - removals))
         i -= 1
       }
-      while (i >= 0) {
-        set(i, null)
-        i -= 1
-      }
+      nullIfy(until = i + 1)
       start = (start + removals) & mask
     }
   }
@@ -243,6 +237,14 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   @inline private def get(idx: Int) = array((start + idx) & mask)
 
   @inline private def set(idx: Int, elem: AnyRef) = array((start + idx) & mask) = elem
+
+  @inline private def nullIfy(from: Int = 0, until: Int = size) = {
+    var i = from
+    while(i < until) {
+      set(i, null)
+      i += 1
+    }
+  }
 
   @inline private def set(array: Array[AnyRef], start: Int, end: Int) = {
     this.array = array
