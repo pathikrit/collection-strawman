@@ -43,7 +43,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   private[this] var mask = 0   // modulus using bitmask since array.length is always power of 2
   set(array, start, end)
 
-  def this(initialSize: Int = ArrayDeque.defaultInitialSize) = this(ArrayDeque.alloc(initialSize), 0, 0)
+  def this(initialSize: Int = ArrayDeque.DefaultInitialSize) = this(ArrayDeque.alloc(initialSize), 0, 0)
 
   override def apply(idx: Int) = {
     ArrayDeque.checkIndex(idx, this)
@@ -167,7 +167,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   override def clone() = new ArrayDeque(array.clone, start, end)
 
-  override def clear() = if (nonEmpty) set(array = ArrayDeque.alloc(ArrayDeque.defaultInitialSize), start = 0, end = 0)
+  override def clear() = if (nonEmpty) set(array = ArrayDeque.alloc(ArrayDeque.DefaultInitialSize), start = 0, end = 0)
 
   override def slice(from: Int, until: Int) = {
     val left = fencePost(from)
@@ -256,7 +256,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   private def ensureCapacity() = {
     // We resize when we are 1 element short intentionally (and not when array is actually full)
-    // This is because when array is full, start = end and it is hard to recognize then if array is actually full or empty
+    // This is because when array is full (OR empty), start is equal to end (full or empty becomes harder to recognize)
     if (size == array.length - 1) resize(array.length)
   }
 
@@ -272,7 +272,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
 
   override def newBuilder[A]: mutable.Builder[A, ArrayDeque[A]] = new ArrayDeque[A]()
 
-  val defaultInitialSize = 8
+  final val DefaultInitialSize = 8
 
   /**
     * Allocates an array whose size is next power of 2 > $len
@@ -281,7 +281,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     * @return
     */
   private[ArrayDeque] def alloc(len: Int) = {
-    val i = len max defaultInitialSize
+    val i = len max DefaultInitialSize
     new Array[AnyRef](((1 << 31) >>> Integer.numberOfLeadingZeros(i)) << 1)
   }
 
