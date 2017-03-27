@@ -46,12 +46,12 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   def this(initialSize: Int = ArrayDeque.defaultInitialSize) = this(ArrayDeque.alloc(initialSize), 0, 0)
 
   override def apply(idx: Int) = {
-    checkIndex(idx)
+    checkIndex(idx, this)
     get(idx).asInstanceOf[A]
   }
 
   override def update(idx: Int, elem: A) = {
-    checkIndex(idx)
+    checkIndex(idx, this)
     set(idx, elem.asInstanceOf[AnyRef])
   }
 
@@ -69,11 +69,11 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     this
   }
 
-  override def ++=:(xs: TraversableOnce[A]) =
+  override def ++=:(xs: TraversableOnce[A]) = //TODO: Improve this - foldRight is expensive
     xs.foldRight(this)((x, coll) => x +=: coll).asInstanceOf[this.type]
 
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
-    checkIndex(idx)
+    checkIndex(idx, this)
     val src = elems.toBuffer
     /*val finalLength = src.length + this.length
     // Either we resize right away or move prefix right or suffix left
@@ -92,23 +92,25 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   }
 
   override def remove(idx: Int, count: Int): Unit = {
-    checkIndex(idx)
+    checkIndex(idx, this)
     if (count <= 0) return
     val removals = (size - idx) min count
     // If we are removing more than half the elements, its cheaper to start over
     // Else, either move the prefix right or the suffix left - whichever is shorter
-    if(2*removals >= size) {
+    if (2*removals >= size) {
       val array2 = ArrayDeque.alloc(size - removals)
       arrayCopy(dest = array2, srcStart = 0, destStart = 0, maxItems = idx)
       arrayCopy(dest = array2, srcStart = idx + removals - 1, destStart = idx, maxItems = size)
       set(array = array2, start = 0, end = size - removals)
     } else if (size - idx <= idx + removals) {
+      //TODO: Instead of if in the loop, break into 2 loops
       (idx until size) foreach {i =>
         val elem = if (i + removals < size) get(i + removals) else null
         set(i, elem)
       }
       end = (end - removals) & mask
     } else {
+      //TODO: Instead of if in the loop, break into 2 loops
       (0 until (idx + removals)).reverse foreach {i =>
         val elem = if (i - removals < 0) null else get(i - removals)
         set(i, elem)
@@ -154,8 +156,8 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   override def clear() = if (nonEmpty) set(array = ArrayDeque.alloc(ArrayDeque.defaultInitialSize), start = 0, end = 0)
 
   override def slice(from: Int, until: Int) = {
-    val left = box(from)
-    val right = box(until)
+    val left = fencePost(from)
+    val right = fencePost(until)
     val len = right - left
     if (len <= 0) {
       ArrayDeque.empty[A]
@@ -190,9 +192,19 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     array2
   }
 
+  /**
+    * This is a more general version of copyToArray - this also accepts a srcStart unlike copyToArray
+    * This copies maxItems elements from this collections srcStart to dest's destStart
+    * If we reach the end of either collections before we could copy maxItems, we simply stop copying
+    *
+    * @param dest
+    * @param srcStart
+    * @param destStart
+    * @param maxItems
+    */
   def arrayCopy(dest: Array[_], srcStart: Int, destStart: Int, maxItems: Int): Unit = {
+    checkIndex(srcStart, this)
     checkIndex(destStart, dest)
-    checkIndex(srcStart)
     val toCopy = maxItems min (size - srcStart) min (dest.length - destStart)
     if (toCopy > 0) {
       val startIdx = (start + srcStart) & mask
@@ -209,9 +221,10 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     */
   def trimToSize(): Unit = resize(size - 1)
 
-  @inline private def checkIndex(idx: Int, seq: GenSeq[_] = this) = if(!seq.isDefinedAt(idx)) throw new IndexOutOfBoundsException(idx.toString)
+  @inline private def checkIndex(idx: Int, seq: GenSeq[_]) =
+    if (!seq.isDefinedAt(idx)) throw new IndexOutOfBoundsException(idx.toString)
 
-  @inline private def box(i: Int) = if (i <= 0) 0 else if (i >= size) size else i
+  @inline private def fencePost(i: Int) = if (i <= 0) 0 else if (i >= size) size else i
 
   @inline private def get(idx: Int) = array((start + idx) & mask)
 
@@ -225,7 +238,11 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     this.end = end
   }
 
-  private def ensureCapacity() = if (size == array.length - 1) resize(array.length)
+  private def ensureCapacity() = {
+    // We resize when we are 1 element short intentionally (and not when array is actually full)
+    // This is because when array is full, start = end and it is hard to recognize then if array is actually full or empty
+    if (size == array.length - 1) resize(array.length)
+  }
 
   private def resize(len: Int) = {
     val array2 = ArrayDeque.alloc(len)
@@ -249,9 +266,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     * @return
     */
   private[ArrayDeque] def alloc(len: Int) = {
-    var i = len max defaultInitialSize
-    //See: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-    i |= i >> 1; i |= i >> 2; i |= i >> 4; i |= i >> 8; i |= i >> 16
-    Array.ofDim[AnyRef](i + 1)
+    val i = len max defaultInitialSize
+    new Array[AnyRef](((1 << 31) >>> Integer.numberOfLeadingZeros(i)) << 1)
   }
 }
