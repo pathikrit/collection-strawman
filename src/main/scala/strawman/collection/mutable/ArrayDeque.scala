@@ -57,34 +57,43 @@ class ArrayDeque[A] private(var array: Array[Any], var start: Int, var end: Int)
 
   override def +=(elem: A) = {
     ensureCapacity()
-    array(end) = elem
-    end = (end + 1) & mask
+    appendAssumingCapacity(elem)
     this
   }
 
   override def +=:(elem: A) = {
     ensureCapacity()
-    start = (start - 1) & mask
-    array(start) = elem
+    prependAssumingCapacity(elem)
     this
   }
 
-  override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
+  @inline private[this] def appendAssumingCapacity(elem: A) = {
+    array(end) = elem
+    end = (end + 1) & mask
+  }
+
+  @inline private[this] def prependAssumingCapacity(elem: A) = {
+    start = (start - 1) & mask
+    array(start) = elem
+  }
+
+  override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
     ArrayDeque.checkIndex(idx, this)
+    if (elems.isEmpty) return
     val srcLength = elems.size
     val finalLength = srcLength + this.length
     // Either we resize right away or move prefix right or suffix left
-    if (2*finalLength >= array.length) {
+    if (2*finalLength >= array.length - 1) {
       val array2 = ArrayDeque.alloc(finalLength)
       copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
       elems.copyToArray(array2, idx)
       copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
       set(array = array2, start = 0, end = finalLength)
     } else {
-      // TODO: choose to move prefix right or suffix left
       val suffix = drop(idx)
       end = (start + idx) & mask
-      this ++= elems ++= suffix
+      elems.foreach(appendAssumingCapacity)
+      suffix.foreach(appendAssumingCapacity)
     }
   }
 
