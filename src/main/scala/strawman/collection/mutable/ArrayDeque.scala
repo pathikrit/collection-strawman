@@ -148,6 +148,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
       val elem = array(start)
       array(start) = null
       start = (start + 1) & mask
+      if (2*size < mask) resize(size)
       Some(elem.asInstanceOf[A])
     }
   }
@@ -159,6 +160,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
       end = (end - 1) & mask
       val elem = array(end)
       array(end) = null
+      if (2*size < mask) resize(size)
       Some(elem.asInstanceOf[A])
     }
   }
