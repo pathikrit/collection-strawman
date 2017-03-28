@@ -165,7 +165,11 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   override def reverse = {
     val r = new ArrayDeque[A](initialSize = size)
-    indices.foreach({i => r.appendAssumingCapacity(this(size - i - 1))})
+    var i = length
+    while(0 < i) {
+      i -= 1
+      r.appendAssumingCapacity(this(i))
+    }
     r
   }
 
