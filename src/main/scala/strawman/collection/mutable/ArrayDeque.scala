@@ -121,7 +121,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
         set(i + removals, null)
         i += 1
       }
-      nullIfy(from = i)
+      nullify(from = i)
       end = (end - removals) & mask
     } else {
       var i = idx + removals - 1
@@ -130,7 +130,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
         set(i - removals, null)
         i -= 1
       }
-      nullIfy(until = i + 1)
+      nullify(until = i + 1)
       start = (start + removals) & mask
     }
   }
@@ -244,7 +244,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   @inline private[this] def set(idx: Int, elem: AnyRef) = array((start + idx) & mask) = elem
 
-  @inline private[this] def nullIfy(from: Int = 0, until: Int = size) = {
+  @inline private[this] def nullify(from: Int = 0, until: Int = size) = {
     var i = from
     while(i < until) {
       set(i, null)
@@ -260,12 +260,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     this.end = end
   }
 
-  private[this] def ensureCapacity() = {
-    /* We resize when we are 1 element short intentionally (and not when array is actually full)
-     * This is because when array is full, start is equal to end (which is also true when array is empty)
-     * making it hard to distinguish between the full and empty cases */
-    if (size == array.length - 1) resize(array.length)
-  }
+  private[this] def ensureCapacity() = if (size == mask) resize(array.length)
 
   private[this] def resize(len: Int) = {
     val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
