@@ -56,13 +56,13 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
   }
 
   override def +=(elem: A) = {
-    ensureCapacity()
+    sizeHint(size)
     appendAssumingCapacity(elem)
     this
   }
 
   override def +=:(elem: A) = {
-    ensureCapacity()
+    sizeHint(size)
     prependAssumingCapacity(elem)
     this
   }
@@ -72,7 +72,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     end = (end + 1) & mask
   }
 
-  @inline private[this] def prependAssumingCapacity(elem: A) = {
+  @inline private[ArrayDeque] def prependAssumingCapacity(elem: A) = {
     start = (start - 1) & mask
     array(start) = elem.asInstanceOf[AnyRef]
   }
@@ -165,13 +165,11 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   override def reverse = {
     val r = new ArrayDeque[A](initialSize = size)
-    var i = length
-    while(0 < i) {
-      i -= 1
-      r.appendAssumingCapacity(this(i))
-    }
+    this.foreach(r.prependAssumingCapacity)
     r
   }
+
+  override def sizeHint(hint: Int) = if (hint >= mask) resize(hint + 1)
 
   override def length = (end - start) & mask
 
@@ -263,8 +261,6 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     this.start = start
     this.end = end
   }
-
-  private[this] def ensureCapacity() = if (size == mask) resize(array.length)
 
   private[this] def resize(len: Int) = {
     val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
