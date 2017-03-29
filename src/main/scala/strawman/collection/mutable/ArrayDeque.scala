@@ -1,4 +1,4 @@
-package scala
+package scala                     //TODO: Change this strawman --> we just need sizeHintIfCheap from scala
 package collection.mutable
 
 import scala.collection.{GenSeq, generic, mutable}
@@ -77,6 +77,11 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     array(start) = elem.asInstanceOf[AnyRef]
   }
 
+  override def ++=:(elems: TraversableOnce[A]) = {
+    elems.foreach(+=:)
+    this
+  }
+
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
     ArrayDeque.checkIndex(idx, this)
     if (elems.isEmpty) return
@@ -84,7 +89,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
       case srcLength if srcLength >= 0 =>
         val finalLength = srcLength + this.length
         // Either we resize right away or move prefix right or suffix left
-        if (2*finalLength >= array.length - 1) {
+        if (2*finalLength >= mask) {
           val array2 = ArrayDeque.alloc(finalLength)
           copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
           elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
