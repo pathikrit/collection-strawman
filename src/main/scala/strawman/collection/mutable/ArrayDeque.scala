@@ -30,8 +30,11 @@ import scala.reflect.ClassTag
   *  @define willNotTerminateInf
   */
 @SerialVersionUID(1L)
-class ArrayDeque[A] private[ArrayDeque](private[ArrayDeque] var array: Array[AnyRef], private[ArrayDeque] var start: Int, private[ArrayDeque] var end: Int)
-  extends mutable.AbstractBuffer[A]
+class ArrayDeque[A] private[ArrayDeque](
+    private[ArrayDeque] var array: Array[AnyRef],
+    private[ArrayDeque] var start: Int,
+    private[ArrayDeque] var end: Int
+) extends mutable.AbstractBuffer[A]
     with mutable.Buffer[A]
     with generic.GenericTraversableTemplate[A, ArrayDeque]
     with mutable.BufferLike[A, ArrayDeque[A]]
@@ -75,6 +78,24 @@ class ArrayDeque[A] private[ArrayDeque](private[ArrayDeque] var array: Array[Any
   @inline private[ArrayDeque] def prependAssumingCapacity(elem: A) = {
     start = (start - 1) & mask
     array(start) = elem.asInstanceOf[AnyRef]
+  }
+
+  override def ++=:(elems: TraversableOnce[A]): this.type = {
+    // Note this is faster than super.++=: because this does not need to convert TraversableOnce to a Traversable
+    if (elems.isEmpty) return this
+    elems.sizeHintIfCheap match {
+      case srcLength if srcLength >= 0 && 2*(srcLength + this.length) >= mask =>
+        val finalLength = srcLength + this.length
+        val array2 = ArrayDeque.alloc(finalLength)
+        elems.copyToArray(array2.asInstanceOf[Array[A]])
+        copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = size)
+        set(array = array2, start = 0, end = finalLength)
+      case _ =>
+        val copy = clone()
+        end = start
+        this ++= elems ++= copy
+    }
+    this
   }
 
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
@@ -186,6 +207,8 @@ class ArrayDeque[A] private[ArrayDeque](private[ArrayDeque] var array: Array[Any
   override def length = (end - start) & mask
 
   override def isEmpty = start == end
+
+  override def nonEmpty = start != end
 
   override def clone() = new ArrayDeque(array.clone, start, end)
 
