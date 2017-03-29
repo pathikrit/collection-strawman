@@ -77,10 +77,10 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     array(start) = elem.asInstanceOf[AnyRef]
   }
 
-  override def ++=:(elems: TraversableOnce[A]) = {
-    elems.foreach(+=:)
-    this
-  }
+//  override def ++=:(elems: TraversableOnce[A]) = {
+//    elems.foreach(+=:)  // This is better insertAll(0, elems) as it saves a `.toTraversable` call
+//    this
+//  }
 
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
     ArrayDeque.checkIndex(idx, this)
@@ -184,7 +184,27 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
 
   override def clone() = new ArrayDeque(array.clone, start, end)
 
-  override def clear() = if (nonEmpty) set(array = ArrayDeque.alloc(ArrayDeque.DefaultInitialSize), start = 0, end = 0)
+  /**
+    * Note: This does not actually resize the internal representation.
+    * See clearAndShrink if you want to also resize internally
+    */
+  override def clear() = {
+    nullify()
+    start = 0
+    end = 0
+  }
+
+  /**
+    * clears this buffer and shrinks to @param size
+    *
+    * @param size
+    * @return
+    */
+  def clearAndShrink(size: Int = ArrayDeque.DefaultInitialSize): this.type = {
+    require(size >= 0, s"Positive size required")
+    set(array = ArrayDeque.alloc(size), start = 0, end = 0)
+    this
+  }
 
   override def slice(from: Int, until: Int) = {
     val left = if (from <= 0) 0 else if (from >= size) size else from
