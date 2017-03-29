@@ -30,7 +30,7 @@ import scala.reflect.ClassTag
   *  @define willNotTerminateInf
   */
 @SerialVersionUID(1L)
-class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: Int)
+class ArrayDeque[A] private[ArrayDeque](private[ArrayDeque] var array: Array[AnyRef], private[ArrayDeque] var start: Int, private[ArrayDeque] var end: Int)
   extends mutable.AbstractBuffer[A]
     with mutable.Buffer[A]
     with generic.GenericTraversableTemplate[A, ArrayDeque]
@@ -290,6 +290,7 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     this.array = array
     this.mask = array.length - 1
     assert((array.length & mask) == 0, s"Array.length must be power of 2")
+    assert(0 <= start && start <= mask && 0 <= end && end <= mask)
     this.start = start
     this.end = end
   }
