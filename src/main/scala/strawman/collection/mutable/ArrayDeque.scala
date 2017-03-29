@@ -77,11 +77,6 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     array(start) = elem.asInstanceOf[AnyRef]
   }
 
-//  override def ++=:(elems: TraversableOnce[A]) = {
-//    elems.foreach(+=:)  // This is better insertAll(0, elems) as it saves a `.toTraversable` call
-//    this
-//  }
-
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
     ArrayDeque.checkIndex(idx, this)
     if (elems.isEmpty) return
@@ -146,26 +141,36 @@ class ArrayDeque[A] private(var array: Array[AnyRef], var start: Int, var end: I
     elem
   }
 
-  def removeFirst(): Option[A] = {
+  /**
+    *
+    * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
+    * @return
+    */
+  def removeFirst(resizeInternalRepr: Boolean = false): Option[A] = {
     if (isEmpty) {
       None
     } else {
       val elem = array(start)
       array(start) = null
       start = (start + 1) & mask
-      if (2*size < mask) resize(size)
+      if (resizeInternalRepr && 2*size < mask) resize(size)
       Some(elem.asInstanceOf[A])
     }
   }
 
-  def removeLast(): Option[A] = {
+  /**
+    *
+    * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
+    * @return
+    */
+  def removeLast(resizeInternalRepr: Boolean = false): Option[A] = {
     if (isEmpty) {
       None
     } else {
       end = (end - 1) & mask
       val elem = array(end)
       array(end) = null
-      if (2*size < mask) resize(size)
+      if (resizeInternalRepr && 2*size < mask) resize(size)
       Some(elem.asInstanceOf[A])
     }
   }
