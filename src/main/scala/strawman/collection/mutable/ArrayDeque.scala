@@ -61,23 +61,23 @@ class ArrayDeque[A] private[ArrayDeque](
   override def +=(elem: A) = {
     sizeHint(size)
     appendAssumingCapacity(elem)
-    this
   }
 
   override def +=:(elem: A) = {
     sizeHint(size)
     prependAssumingCapacity(elem)
+  }
+
+  @inline private[ArrayDeque] def appendAssumingCapacity(elem: A): this.type = {
+    array(end) = elem.asInstanceOf[AnyRef]
+    end = (end + 1) & mask
     this
   }
 
-  @inline private[ArrayDeque] def appendAssumingCapacity(elem: A) = {
-    array(end) = elem.asInstanceOf[AnyRef]
-    end = (end + 1) & mask
-  }
-
-  @inline private[ArrayDeque] def prependAssumingCapacity(elem: A) = {
+  @inline private[ArrayDeque] def prependAssumingCapacity(elem: A): this.type = {
     start = (start - 1) & mask
     array(start) = elem.asInstanceOf[AnyRef]
+    this
   }
 
   override def ++=:(elems: TraversableOnce[A]): this.type = {
@@ -196,11 +196,7 @@ class ArrayDeque[A] private[ArrayDeque](
     }
   }
 
-  override def reverse = {
-    val r = new ArrayDeque[A](initialSize = size)
-    this.foreach(r.prependAssumingCapacity)
-    r
-  }
+  override def reverse = foldLeft(new ArrayDeque[A](initialSize = size))(_.prependAssumingCapacity(_))
 
   override def sizeHint(hint: Int) = if (hint >= mask) resize(hint + 1)
 
