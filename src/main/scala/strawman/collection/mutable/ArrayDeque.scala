@@ -249,16 +249,20 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def sliding(window: Int, step: Int) = {
-    require(window > 0 && step > 0, s"size=$size and step=$step, but both must be positive")
-    //TODO: Write this in terms of an Iterator.from() util
+    require(window > 0 && step > 0, s"window=$window and step=$step, but both must be positive")
+    // Note: This can also be return in terms of $end where $end is the smallest multiple of $step and $end + $window >= $length
+    //val l = (length - window) max 0
+    //val rem = l%step
+    //val end = if (rem == 0) l else (l + step - rem) min (length - 1)
+    //(0 to end by step).map(i => slice(i, i + window))
     new Iterator[ArrayDeque[A]] {
-      var p, q = 0
-      override def hasNext = q < self.length && p < self.length
+      var l, r = 0
+      override def hasNext = l < self.length && r < self.length
       override def next()= {
-        val res = self.slice(p, p + window)
-        q = p + res.length
-        p = p + step
-        res
+        val slice = self.slice(l, l + window)
+        r = l + slice.length
+        l = l + step
+        slice
       }
     }
   }
