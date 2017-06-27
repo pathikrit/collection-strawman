@@ -41,7 +41,7 @@ class ArrayDequeSpec extends FlatSpec {
       j <- -100 to 100
     } {
       assert(buffer.slice(i, j) === buffer2.slice(i, j))
-      if (i >= 1 && j >= 1 && j >= i) assert(buffer.sliding(i, j).toList === buffer2.sliding(i, j).toList)
+      if (i > 0 && j > 0) assert(buffer.sliding(i, j).toList === buffer2.sliding(i, j).toList)
     }
   }
 }

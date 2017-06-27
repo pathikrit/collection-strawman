@@ -41,7 +41,7 @@ class ArrayDeque[A] private[ArrayDeque](
     with mutable.IndexedSeq[A]
     with mutable.IndexedSeqOptimized[A, ArrayDeque[A]]
     with mutable.Builder[A, ArrayDeque[A]]
-    with Serializable {
+    with Serializable {self =>
 
   private[this] var mask = 0   // modulus using bitmask since array.length is always power of 2
   set(array, start, end)
@@ -249,8 +249,18 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def sliding(window: Int, step: Int) = {
-    require(window >= 1 && step >= 1, s"size=$size and step=$step, but both must be positive")
-    (indices by step).iterator.map(i => slice(i, i + window))
+    require(window > 0 && step > 0, s"size=$size and step=$step, but both must be positive")
+    //TODO: Write this in terms of an Iterator.from() util
+    new Iterator[ArrayDeque[A]] {
+      var p, q = 0
+      override def hasNext = q < self.length && p < self.length
+      override def next()= {
+        val res = self.slice(p, p + window)
+        q = p + res.length
+        p = p + step
+        res
+      }
+    }
   }
 
   override def grouped(n: Int) = sliding(n, n)
