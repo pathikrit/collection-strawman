@@ -70,12 +70,12 @@ class ArrayDeque[A] private[ArrayDeque](
 
   @inline private[ArrayDeque] def appendAssumingCapacity(elem: A): this.type = {
     array(end) = elem.asInstanceOf[AnyRef]
-    end = (end + 1) & mask
+    end = fromEnd(-1)
     this
   }
 
   @inline private[ArrayDeque] def prependAssumingCapacity(elem: A): this.type = {
-    start = (start - 1) & mask
+    start = fromStart(-1)
     array(start) = elem.asInstanceOf[AnyRef]
     this
   }
@@ -113,13 +113,13 @@ class ArrayDeque[A] private[ArrayDeque](
           set(array = array2, start = 0, end = finalLength)
         } else {
           val suffix = drop(idx)
-          end = (start + idx) & mask
+          end = fromStart(idx)
           elems.foreach(appendAssumingCapacity)
           suffix.foreach(appendAssumingCapacity)
         }
       case _ => //expensive to compute size
         val suffix = drop(idx)
-        end = (start + idx) & mask
+        end = fromStart(idx)
         this ++= elems ++= suffix
     }
   }
@@ -143,7 +143,7 @@ class ArrayDeque[A] private[ArrayDeque](
         i += 1
       }
       nullify(from = i)
-      end = (end - removals) & mask
+      end = fromEnd(removals)
     } else {
       var i = idx + removals - 1
       while(i - removals >= 0) {
@@ -152,7 +152,7 @@ class ArrayDeque[A] private[ArrayDeque](
         i -= 1
       }
       nullify(until = i + 1)
-      start = (start + removals) & mask
+      start = fromStart(removals)
     }
   }
 
@@ -173,7 +173,7 @@ class ArrayDeque[A] private[ArrayDeque](
     } else {
       val elem = array(start)
       array(start) = null
-      start = (start + 1) & mask
+      start = fromStart(1)
       if (resizeInternalRepr && 2*size < mask) resize(size)
       Some(elem.asInstanceOf[A])
     }
@@ -188,7 +188,7 @@ class ArrayDeque[A] private[ArrayDeque](
     if (isEmpty) {
       None
     } else {
-      end = (end - 1) & mask
+      end = fromEnd(1)
       val elem = array(end)
       array(end) = null
       if (resizeInternalRepr && 2*size < mask) resize(size)
@@ -200,7 +200,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def sizeHint(hint: Int) = if (hint >= mask) resize(hint + 1)
 
-  override def length = (end - start) & mask
+  override def length = fromEnd(start)
 
   override def isEmpty = start == end
 
@@ -280,7 +280,7 @@ class ArrayDeque[A] private[ArrayDeque](
     ArrayDeque.checkIndex(destStart, dest)
     val toCopy = maxItems min (size - srcStart) min (dest.length - destStart)
     if (toCopy > 0) {
-      val startIdx = (start + srcStart) & mask
+      val startIdx = fromStart(srcStart)
       val block1 = toCopy min (array.length - startIdx)
       Array.copy(src = array, srcPos = startIdx, dest = dest, destPos = destStart, length = block1)
       if (block1 < toCopy) {
@@ -295,11 +295,15 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def trimToSize(): Unit = resize(size - 1)
 
-  @inline private[this] def get(idx: Int) = array((start + idx) & mask)
+  @inline private[this] def fromStart(idx: Int) = (start + idx) & mask
 
-  @inline private[this] def set(idx: Int, elem: AnyRef) = array((start + idx) & mask) = elem
+  @inline private[this] def fromEnd(idx: Int) = (end - idx) & mask
 
-  @inline private[this] def nullify(from: Int = 0, until: Int = size) = {
+  @inline private[this] def get(idx: Int) = array(fromStart(idx))
+
+  @inline private[this] def set(idx: Int, elem: AnyRef) = array(fromStart(idx)) = elem
+
+  private[this] def nullify(from: Int = 0, until: Int = size) = {
     var i = from
     while(i < until) {
       set(i, null)
@@ -307,7 +311,7 @@ class ArrayDeque[A] private[ArrayDeque](
     }
   }
 
-  @inline private[this] def set(array: Array[AnyRef], start: Int, end: Int) = {
+  private[this] def set(array: Array[AnyRef], start: Int, end: Int) = {
     this.array = array
     this.mask = array.length - 1
     assert((array.length & mask) == 0, s"Array.length must be power of 2")
