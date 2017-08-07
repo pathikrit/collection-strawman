@@ -3,6 +3,9 @@ package collection.mutable
 
 import scala.collection.{GenSeq, generic, mutable}
 import scala.reflect.ClassTag
+import scala.Predef._
+
+import java.lang.Integer
 
 /** An implementation of a double-ended queue that internally uses a resizable circular buffer
   *  Append, prepend, removeFirst, removeLast and random-access (indexed-lookup and indexed-replacement)

@@ -1,22 +1,25 @@
 package strawman
 package collection.test
 
+import scala._
+import scala.Predef._
+import scala.collection.mutable
 import scala.collection.mutable.ArrayDeque
 
-import org.scalatest._
+import org.junit.Test
 
-import scala.collection.mutable
+class ArrayDequeSpec {
 
-class ArrayDequeSpec extends FlatSpec {
-  "circular-buffer" should "match the library" in {
+  @Test
+  def apply() = {
     val buffer = ArrayDeque.empty[Int]
     val buffer2 = mutable.ArrayBuffer.empty[Int]
 
     def apply[U](f: mutable.Buffer[Int] => U) = {
       //println(s"Before: [buffer1=${buffer}; buffer2=${buffer2}]")
-      assert(f(buffer) === f(buffer2))
-      assert(buffer === buffer2)
-      assert(buffer.reverse === buffer2.reverse)
+      assert(f(buffer) == f(buffer2))
+      assert(buffer == buffer2)
+      assert(buffer.reverse == buffer2.reverse)
     }
 
     apply(_.append(1, 2, 3, 4, 5))
@@ -33,15 +36,15 @@ class ArrayDequeSpec extends FlatSpec {
     apply(_.appendAll(Seq.tabulate(100)(identity)))
 
     (-100 to 100) foreach {i =>
-      assert(buffer.splitAt(i) === buffer2.splitAt(i))
+      assert(buffer.splitAt(i) == buffer2.splitAt(i))
     }
 
     for {
       i <- -100 to 100
       j <- -100 to 100
     } {
-      assert(buffer.slice(i, j) === buffer2.slice(i, j))
-      if (i > 0 && j > 0) assert(buffer.sliding(i, j).toList === buffer2.sliding(i, j).toList)
+      assert(buffer.slice(i, j) == buffer2.slice(i, j))
+      if (i > 0 && j > 0) assert(buffer.sliding(i, j).toList == buffer2.sliding(i, j).toList)
     }
   }
 }
