@@ -1,4 +1,4 @@
-package scala                     //TODO: Change this strawman --> we just need sizeHintIfCheap from scala
+package scala             //TODO: Change this to strawman --> we just need sizeHintIfCheap from scala but in strawman it is called knownSize
 package collection.mutable
 
 import scala.collection.{GenSeq, generic, mutable}
@@ -10,8 +10,8 @@ import scala.reflect.ClassTag
   *  and thus insertions and removals from end/beginning are fast.
   *
   *  @author  Pathikrit Bhowmick
-  *  @version 2.12
-  *  @since   2.12
+  *  @version 2.13
+  *  @since   2.13
   *
   *  @tparam A  the type of this ArrayDeque's elements.
   *
@@ -44,18 +44,27 @@ class ArrayDeque[A] private[ArrayDeque](
     with Serializable {
 
   private[this] var mask = 0   // modulus using bitmask since array.length is always power of 2
-  set(array, start, end)
+  resetInternal(array, start, end)
+
+  private[this] def resetInternal(array: Array[AnyRef], start: Int, end: Int) = {
+    this.array = array
+    this.mask = array.length - 1
+    assert((array.length & mask) == 0, s"Array.length must be power of 2")
+    assert(0 <= start && start <= mask && 0 <= end && end <= mask)
+    this.start = start
+    this.end = end
+  }
 
   def this(initialSize: Int = ArrayDeque.DefaultInitialSize) = this(ArrayDeque.alloc(initialSize), 0, 0)
 
   override def apply(idx: Int) = {
     ArrayDeque.checkIndex(idx, this)
-    get(idx).asInstanceOf[A]
+    getInternal(idx).asInstanceOf[A]
   }
 
   override def update(idx: Int, elem: A) = {
     ArrayDeque.checkIndex(idx, this)
-    set(idx, elem.asInstanceOf[AnyRef])
+    setInternal(idx, elem.asInstanceOf[AnyRef])
   }
 
   override def +=(elem: A) = {
@@ -80,53 +89,56 @@ class ArrayDeque[A] private[ArrayDeque](
     this
   }
 
-  override def ++=:(elems: TraversableOnce[A]): this.type = {
+  override def ++=:(elems: TraversableOnce[A]) = {
     // Note this is faster than super.++=: because this does not need to convert TraversableOnce to a Traversable
-    if (elems.isEmpty) return this
-    elems.sizeHintIfCheap match {
-      case srcLength if srcLength >= 0 && 2*(srcLength + this.length) >= mask =>
-        val finalLength = srcLength + this.length
-        val array2 = ArrayDeque.alloc(finalLength)
-        elems.copyToArray(array2.asInstanceOf[Array[A]])
-        copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = size)
-        set(array = array2, start = 0, end = finalLength)
-      case _ =>
-        val copy = clone()
-        end = start
-        this ++= elems ++= copy
+    if (elems.nonEmpty) {
+      elems.sizeHintIfCheap match {
+        case srcLength if srcLength >= 0 && 2*(srcLength + this.length) >= mask =>
+          val finalLength = srcLength + this.length
+          val array2 = ArrayDeque.alloc(finalLength)
+          elems.copyToArray(array2.asInstanceOf[Array[A]])
+          copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = size)
+          resetInternal(array = array2, start = 0, end = finalLength)
+        case _ =>
+          val copy = clone()
+          end = start
+          this ++= elems ++= copy
+      }
     }
     this
   }
 
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
     ArrayDeque.checkIndex(idx, this)
-    if (elems.isEmpty) return
-    elems.sizeHintIfCheap match {
-      case srcLength if srcLength >= 0 =>
-        val finalLength = srcLength + this.length
-        // Either we resize right away or move prefix right or suffix left
-        if (2*finalLength >= mask) {
-          val array2 = ArrayDeque.alloc(finalLength)
-          copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
-          elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
-          copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
-          set(array = array2, start = 0, end = finalLength)
-        } else {
+    if (elems.nonEmpty) {
+      elems.sizeHintIfCheap match {
+        case srcLength if srcLength >= 0 =>
+          val finalLength = srcLength + this.length
+          // Either we resize right away or move prefix right or suffix left
+          if (2*finalLength >= mask) {
+            val array2 = ArrayDeque.alloc(finalLength)
+            copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
+            elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
+            copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
+            resetInternal(array = array2, start = 0, end = finalLength)
+          } else {
+            val suffix = drop(idx)
+            end = start_+(idx)
+            elems.foreach(appendAssumingCapacity)
+            suffix.foreach(appendAssumingCapacity)
+          }
+        case _ => //expensive to compute size
           val suffix = drop(idx)
           end = start_+(idx)
-          elems.foreach(appendAssumingCapacity)
-          suffix.foreach(appendAssumingCapacity)
-        }
-      case _ => //expensive to compute size
-        val suffix = drop(idx)
-        end = start_+(idx)
-        this ++= elems ++= suffix
+          this ++= elems ++= suffix
+      }
     }
   }
 
   override def remove(idx: Int, count: Int): Unit = {
+    if (count < 0) throw new IllegalArgumentException(s"removing negative number of elements: $count")
     ArrayDeque.checkIndex(idx, this)
-    if (count <= 0) return
+    if (count == 0) return
     val removals = (size - idx) min count
     // If we are removing more than half the elements, its cheaper to start over
     // Else, choose the shorter: either move the prefix (0 until (idx + removals) right OR the suffix (idx to size) left
@@ -134,12 +146,12 @@ class ArrayDeque[A] private[ArrayDeque](
       val array2 = ArrayDeque.alloc(size - removals)
       copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
       copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = size)
-      set(array = array2, start = 0, end = size - removals)
+      resetInternal(array = array2, start = 0, end = size - removals)
     } else if (size - idx <= idx + removals) {
       var i = idx
       while(i + removals < size) {
-        set(i, get(i + removals))
-        set(i + removals, null)
+        setInternal(i, getInternal(i + removals))
+        setInternal(i + removals, null)
         i += 1
       }
       nullify(from = i)
@@ -147,8 +159,8 @@ class ArrayDeque[A] private[ArrayDeque](
     } else {
       var i = idx + removals - 1
       while(i - removals >= 0) {
-        set(i, get(i - removals))
-        set(i - removals, null)
+        setInternal(i, getInternal(i - removals))
+        setInternal(i - removals, null)
         i -= 1
       }
       nullify(until = i + 1)
@@ -206,8 +218,10 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def nonEmpty = start != end
 
-  override def clone() = new ArrayDeque(array.clone, start, end)
-
+  override def clone() = {
+    // TODO Scala's array.clone should call java.util.Arrays.copyOf(array, array.length)
+    new ArrayDeque(java.util.Arrays.copyOf(array, array.length), start, end)
+  }
   /**
     * Note: This does not actually resize the internal representation.
     * See clearAndShrink if you want to also resize internally
@@ -226,7 +240,7 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def clearAndShrink(size: Int = ArrayDeque.DefaultInitialSize): this.type = {
     require(size >= 0, s"Non-negative size required")
-    set(array = ArrayDeque.alloc(size), start = 0, end = 0)
+    resetInternal(array = ArrayDeque.alloc(size), start = 0, end = 0)
     this
   }
 
@@ -294,34 +308,31 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def trimToSize(): Unit = resize(size - 1)
 
+  /**
+    * Add idx to start modulo mask
+    */
   @inline private[this] def start_+(idx: Int) = (start + idx) & mask
 
+  /**
+    * Subtract idx from end modulo mask
+    */
   @inline private[this] def end_-(idx: Int) = (end - idx) & mask
 
-  @inline private[this] def get(idx: Int) = array(start_+(idx))
+  @inline private[this] def getInternal(idx: Int) = array(start_+(idx))
 
-  @inline private[this] def set(idx: Int, elem: AnyRef) = array(start_+(idx)) = elem
+  @inline private[this] def setInternal(idx: Int, elem: AnyRef) = array(start_+(idx)) = elem
 
   private[this] def nullify(from: Int = 0, until: Int = size) = {
     var i = from
     while(i < until) {
-      set(i, null)
+      setInternal(i, null)
       i += 1
     }
   }
 
-  private[this] def set(array: Array[AnyRef], start: Int, end: Int) = {
-    this.array = array
-    this.mask = array.length - 1
-    assert((array.length & mask) == 0, s"Array.length must be power of 2")
-    assert(0 <= start && start <= mask && 0 <= end && end <= mask)
-    this.start = start
-    this.end = end
-  }
-
   private[this] def resize(len: Int) = {
     val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
-    set(array = array2, start = 0, end = size)
+    resetInternal(array = array2, start = 0, end = size)
   }
 }
 
@@ -335,13 +346,14 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
 
   /**
     * Allocates an array whose size is next power of 2 > $len
+    * Largest possible len is 1<<30 - 1
     *
     * @param len
     * @return
     */
   private[ArrayDeque] def alloc(len: Int) = {
-    val i = len max DefaultInitialSize
-    new Array[AnyRef](((1 << 31) >>> Integer.numberOfLeadingZeros(i)) << 1)
+    val size = ((1 << 31) >>> Integer.numberOfLeadingZeros(len max DefaultInitialSize)) << 1
+    new Array[AnyRef](size.ensuring(_ >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len"))
   }
 
   @inline private[ArrayDeque] def checkIndex(idx: Int, seq: GenSeq[_]) =
