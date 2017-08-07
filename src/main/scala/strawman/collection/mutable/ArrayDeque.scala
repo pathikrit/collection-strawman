@@ -1,6 +1,7 @@
-package scala             //TODO: Change this to strawman --> we just need sizeHintIfCheap from scala but in strawman it is called knownSize
+package strawman
 package collection.mutable
 
+import scala._
 import scala.collection.{GenSeq, generic, mutable}
 import scala.reflect.ClassTag
 import scala.Predef._
@@ -95,7 +96,7 @@ class ArrayDeque[A] private[ArrayDeque](
   override def ++=:(elems: TraversableOnce[A]) = {
     // Note this is faster than super.++=: because this does not need to convert TraversableOnce to a Traversable
     if (elems.nonEmpty) {
-      elems.sizeHintIfCheap match {
+      ArrayDeque.knownSize(elems) match {
         case srcLength if srcLength >= 0 && 2*(srcLength + this.length) >= mask =>
           val finalLength = srcLength + this.length
           val array2 = ArrayDeque.alloc(finalLength)
@@ -114,7 +115,7 @@ class ArrayDeque[A] private[ArrayDeque](
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
     ArrayDeque.checkIndex(idx, this)
     if (elems.nonEmpty) {
-      elems.sizeHintIfCheap match {
+      ArrayDeque.knownSize(elems) match {
         case srcLength if srcLength >= 0 =>
           val finalLength = srcLength + this.length
           // Either we resize right away or move prefix right or suffix left
@@ -346,6 +347,10 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
   override def newBuilder[A]: mutable.Builder[A, ArrayDeque[A]] = new ArrayDeque[A]()
 
   final val DefaultInitialSize = 8
+
+  private[ArrayDeque] def knownSize[A](coll: TraversableOnce[A]) = {
+    /*coll.sizeHintIfCheap*/ -1 //TODO: Remove this temporary util when we switch to strawman .sizeHintIfCheap is now .knownSize
+  }
 
   /**
     * Allocates an array whose size is next power of 2 > $len

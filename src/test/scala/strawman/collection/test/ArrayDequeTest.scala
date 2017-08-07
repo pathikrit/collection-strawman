@@ -4,11 +4,11 @@ package collection.test
 import scala._
 import scala.Predef._
 import scala.collection.mutable
-import scala.collection.mutable.ArrayDeque
+import strawman.collection.mutable.ArrayDeque
 
 import org.junit.Test
 
-class ArrayDequeSpec {
+class ArrayDequeTest {
 
   @Test
   def apply() = {
