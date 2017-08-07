@@ -336,8 +336,10 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   private[this] def resize(len: Int) = {
-    val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
-    resetInternal(array = array2, start = 0, end = size)
+    if (ArrayDeque.nextPowerOfTwo(len) != array.length) {
+      val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
+      resetInternal(array = array2, start = 0, end = size)
+    }
   }
 }
 
@@ -360,10 +362,11 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     * @param len
     * @return
     */
-  private[ArrayDeque] def alloc(len: Int) = {
-    val size = ((1 << 31) >>> Integer.numberOfLeadingZeros(len max DefaultInitialSize)) << 1
-    new Array[AnyRef](size.ensuring(_ >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len"))
-  }
+  private[ArrayDeque] def alloc(len: Int) =
+    new Array[AnyRef](nextPowerOfTwo(len).ensuring(_ >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len"))
+
+  private[ArrayDeque] def nextPowerOfTwo(i: Int): Int =
+    ((1 << 31) >>> Integer.numberOfLeadingZeros(i)) << 1
 
   @inline private[ArrayDeque] def checkIndex(idx: Int, seq: GenSeq[_]) =
     if (!seq.isDefinedAt(idx)) throw new IndexOutOfBoundsException(idx.toString)
