@@ -1,28 +1,34 @@
-organization in ThisBuild := "ch.epfl.scala"
+// Convenient setting that allows writing `set scalaVersion := dotty.value` in sbt shell to switch from Scala to Dotty
+val dotty = settingKey[String]("dotty version")
+dotty in ThisBuild := "0.2.0-RC1"
 
-version in ThisBuild := "0.2.0-SNAPSHOT"
-
-resolvers in ThisBuild += "scala-pr" at "https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots"
-scalaVersion in ThisBuild := "2.12.2-ebe1180-SNAPSHOT" // from https://github.com/scala/scala/pull/5742
-scalaBinaryVersion in ThisBuild := "2.12"
-
-scalacOptions in ThisBuild ++=
-  Seq("-deprecation", "-unchecked", "-language:higherKinds")
-
-testOptions in ThisBuild += Tests.Argument(TestFrameworks.JUnit, "-q", "-v", "-s", "-a")
-
-fork in Test in ThisBuild := true
-
-parallelExecution in Test in ThisBuild := false
+val commonSettings = Seq(
+  organization := "ch.epfl.scala",
+  version := "0.4.0-SNAPSHOT",
+  resolvers += "scala-pr" at "https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots",
+  scalaVersion := "2.12.2-ebe1180-SNAPSHOT", // from https://github.com/scala/scala/pull/5742
+  scalaBinaryVersion := { if (!scalaVersion.value.startsWith("2.12.")) scalaBinaryVersion.value else "2.12" },
+  crossScalaVersions := scalaVersion.value :: "2.13.0-M1" :: dotty.value :: Nil,
+  scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-Yno-imports", "-language:higherKinds"/*, "-opt:l:classpath"*/),
+  scalacOptions ++= {
+    if (!isDotty.value)
+      Seq("-opt-warnings") // This option does not exist in Dotty
+    else
+      Seq()
+  },
+  testOptions += Tests.Argument(TestFrameworks.JUnit, "-q", "-v", "-s", "-a"),
+  fork in Test := true,
+  parallelExecution in Test := false
+)
 
 val collections =
   project.in(file("."))
+    .settings(commonSettings: _*)
     .settings(
       name := "collection-strawman",
       libraryDependencies ++= Seq(
-        "org.scala-lang.modules" %% "scala-java8-compat" % "0.8.0",
-        "com.novocode" % "junit-interface" % "0.11" % Test,
-        "org.scalatest" %% "scalatest" % "3.0.1" % Test
+        ("org.scala-lang.modules" %% "scala-java8-compat" % "0.8.0").withDottyCompat(),
+        "com.novocode" % "junit-interface" % "0.11" % Test
       ),
       pomExtra :=
         <developers>
@@ -52,6 +58,7 @@ val timeBenchmark =
   project.in(file("benchmarks/time"))
     .dependsOn(collections)
     .enablePlugins(JmhPlugin)
+    .settings(commonSettings: _*)
     .settings(
       charts := Def.inputTaskDyn {
         val benchmarks = Def.spaceDelimited().parsed
@@ -69,8 +76,9 @@ val timeBenchmark =
 val memoryBenchmark =
   project.in(file("benchmarks/memory"))
     .dependsOn(collections)
+    .settings(commonSettings: _*)
     .settings(
-      libraryDependencies += "org.spire-math" %% "jawn-ast" % "0.10.4",
+      libraryDependencies += ("org.spire-math" %% "jawn-ast" % "0.10.4").withDottyCompat(),
       charts := Def.inputTaskDyn {
         val targetDir = crossTarget.value
         val report = targetDir / "report.json"

@@ -1,17 +1,20 @@
 package strawman
-package collection.immutable
+package collection
+package immutable
 
+import strawman.collection.mutable.Builder
 import scala.Ordering
-
-import strawman.collection.ConstrainedIterablePolyTransforms
 
 /** Base trait for sorted sets */
 trait SortedSet[A]
-  extends collection.SortedSet[A]
-    with Set[A]
-    with SortedSetLike[A, SortedSet]
+  extends Set[A]
+     with collection.SortedSet[A]
+     with SortedSetOps[A, SortedSet, SortedSet[A]]
 
-trait SortedSetLike[A, +C[X] <: SortedSet[X]]
-  extends collection.SortedSetLike[A, C]
-    with SetLike[A, Set] // Inherited Set operations return a `Set`
-    with SetMonoTransforms[A, C[A]] // Override the return type of Set ops to return C[A]
+trait SortedSetOps[A,
+                   +CC[X] <: SortedSet[X] with SortedSetOps[X, CC, _],
+                   +C <: SortedSet[A] with SortedSetOps[A, SortedSet, C]]
+  extends SetOps[A, Set, C]
+     with collection.SortedSetOps[A, CC, C]
+
+object SortedSet extends SortedIterableFactory.Delegate[SortedSet](TreeSet)

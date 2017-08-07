@@ -1,25 +1,51 @@
 package strawman
-package collection.immutable
+package collection
+package immutable
+
+import scala.{Any, `inline`}
 
 /** Base trait for immutable set collections */
-trait Set[A]
-  extends collection.Set[A]
-    with Iterable[A]
-    with SetLike[A, Set]
+trait Set[A] extends Iterable[A] with collection.Set[A] with SetOps[A, Set, Set[A]]
 
 /** Base trait for immutable set operations */
-trait SetLike[A, +C[X] <: Set[X]]
-  extends collection.SetLike[A, C]
-    with SetMonoTransforms[A, C[A]]
+trait SetOps[A, +CC[X], +C <: Set[A] with SetOps[A, Set, C]]
+  extends collection.SetOps[A, CC, C] {
 
-/** Transformation operations returning a Set containing the same kind of
-  * elements
-  */
-trait SetMonoTransforms[A, +Repr]
-  extends collection.SetMonoTransforms[A, Repr] {
+  protected[this] def coll: C
 
-  def + (elem: A): Repr
+  /** Creates a new set with an additional element, unless the element is
+    *  already present.
+    *
+    *  @param elem the element to be added
+    *  @return a new set that contains all elements of this set and that also
+    *          contains `elem`.
+    */
+  def incl(elem: A): C
 
-  def - (elem: A): Repr
+  /** Alias for `incl` */
+  /*@`inline`*/ final def + (elem: A): C = incl(elem)
+
+  /** Creates a new set with a given element removed from this set.
+    *
+    *  @param elem the element to be removed
+    *  @return a new set that contains all elements of this set but that does not
+    *          contain `elem`.
+    */
+  def excl(elem: A): C
+
+  /** Alias for `excl` */
+  @`inline` final def - (elem: A): C = excl(elem)
+
+  override def concat(that: collection.IterableOnce[A]): C = {
+    var result: C = coll
+    val it = that.iterator()
+    while (it.hasNext) result = result + it.next()
+    result
+  }
+
+  def diff(that: collection.Set[A]): C =
+    coll.foldLeft(empty)((result, elem) => if (that contains elem) result else result + elem)
 
 }
+
+object Set extends IterableFactory.Delegate[Set](HashSet)

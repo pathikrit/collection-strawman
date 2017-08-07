@@ -1,16 +1,20 @@
 package strawman
-package collection.mutable
+package collection
+package mutable
 
 import scala.Ordering
 
-import strawman.collection.ConstrainedIterablePolyTransforms
-
+/**
+  * Base type for mutable sorted set collections
+  */
 trait SortedSet[A]
-  extends collection.SortedSet[A]
-    with Set[A]
-    with SortedSetLike[A, SortedSet]
+  extends Set[A]
+    with collection.SortedSet[A]
+    with SortedSetOps[A, SortedSet, SortedSet[A]]
 
-trait SortedSetLike[A, +C[X] <: SortedSet[X]]
-  extends collection.SortedSetLike[A, C]
-    with SetLike[A, Set]
-    with SetMonoTransforms[A, C[A]]
+trait SortedSetOps[A, +CC[X] <: SortedSet[X], +C <: SortedSet[A]]
+  extends SetOps[A, Set, C]
+    with collection.SortedSetOps[A, CC, C]
+
+object SortedSet
+  extends SortedIterableFactory.Delegate[SortedSet](TreeSet)

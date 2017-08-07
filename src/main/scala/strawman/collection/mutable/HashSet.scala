@@ -1,50 +1,86 @@
-package strawman.collection.mutable
+package strawman
+package collection
+package mutable
 
-import strawman.collection.{IterableFactory, Iterator, MonoBuildable, PolyBuildable}
+import scala.{Any, Boolean, Option, Serializable, SerialVersionUID, Unit}
 
-import scala.{Any, Boolean, Option, Unit}
-import scala.Predef.???
-
-/** Mutable set backed by a hash trie */
-final class HashSet[A]
+/** This class implements mutable sets using a hashtable.
+  *
+  * @author  Matthias Zenger
+  * @author  Martin Odersky
+  * @version 2.0, 31/12/2006
+  * @since   1
+  * @see [[http://docs.scala-lang.org/overviews/collections/concrete-mutable-collection-classes.html#hash_tables "Scala's Collection Library overview"]]
+  * section on `Hash Tables` for more information.
+  *
+  * @define Coll `mutable.HashSet`
+  * @define coll mutable hash set
+  * @define mayNotTerminateInf
+  * @define willNotTerminateInf
+  */
+@SerialVersionUID(1L)
+final class HashSet[A](contents: FlatHashTable.Contents[A])
   extends Set[A]
-    with SetLike[A, HashSet]
-    with MonoBuildable[A, HashSet[A]]
-    with PolyBuildable[A, HashSet]
-    with Builder[A, HashSet[A]] {
+    with SetOps[A, HashSet, HashSet[A]]
+    with StrictOptimizedIterableOps[A, HashSet, HashSet[A]]
+    with Serializable {
 
-  def iterator(): Iterator[A] = ???
+  private[this] val table = new FlatHashTable[A]
 
-  def fromIterable[B](coll: strawman.collection.Iterable[B]): HashSet[B] =
-    HashSet.fromIterable(coll)
-  protected[this] def fromIterableWithSameElemType(coll: strawman.collection.Iterable[A]): HashSet[A] = fromIterable(coll)
-  protected[this] def newBuilderWithSameElemType: Builder[A, HashSet[A]] = new HashSet[A]
-  def newBuilder[E]: Builder[E, HashSet[E]] = new HashSet[E]
-  def result: HashSet[A] = this
+  def this() = this(null)
 
-  def +=(elem: A): this.type = ???
-  def -=(elem: A): this.type = ???
-  def clear(): Unit = ???
+  override def iterator(): Iterator[A] = table.iterator
 
-  def contains(elem: A): Boolean = ???
-  def get(elem: A): Option[A] = ???
-  def subsetOf(that: strawman.collection.Set[A]): Boolean = ???
+  def iterableFactory = HashSet
 
-  def & (that: strawman.collection.Set[A]): HashSet[A] = ???
-  def ++ (that: strawman.collection.Set[A]): HashSet[A] = ???
+  protected[this] def fromSpecificIterable(coll: collection.Iterable[A]): HashSet[A] = fromIterable(coll)
+
+  protected[this] def newSpecificBuilder(): Builder[A, HashSet[A]] = HashSet.newBuilder()
+
+  def add(elem: A): this.type = {
+    table.addElem(elem)
+    this
+  }
+  def subtract(elem: A): this.type = {
+    table.removeElem(elem)
+    this
+  }
+
+  def clear(): Unit = table.clearTable()
+
+  def contains(elem: A): Boolean = table.containsElem(elem)
+
+  def empty: HashSet[A] = HashSet.empty
+
+  def get(elem: A): Option[A] = table.findEntry(elem)
+
+  override def foreach[U](f: A => U): Unit = {
+    var i = 0
+    val entries = table.table
+    val len = entries.length
+    while (i < len) {
+      val curEntry = entries(i)
+      if (curEntry ne null) f(table.entryToElem(curEntry))
+      i += 1
+    }
+  }
+
+  private def writeObject(s: java.io.ObjectOutputStream): Unit = {
+    table.serializeTo(s)
+  }
+
+  private def readObject(in: java.io.ObjectInputStream): Unit = {
+    table.init(in, x => ())
+  }
 
 }
 
 object HashSet extends IterableFactory[HashSet] {
 
-  def fromIterable[B](it: strawman.collection.Iterable[B]): HashSet[B] = {
-    val result = new HashSet[B]
-    for (elem <- it) {
-      result += elem
-    }
-    result
-  }
+  def fromIterable[B](it: strawman.collection.Iterable[B]): HashSet[B] = Growable.fromIterable(empty[B], it)
 
-  def newBuilder[A]: Builder[A, HashSet[A]] = new HashSet[A]
+  def empty[A]: HashSet[A] = new HashSet[A]
+
+  def newBuilder[A](): Builder[A, HashSet[A]] = new GrowableBuilder(empty[A])
 
 }

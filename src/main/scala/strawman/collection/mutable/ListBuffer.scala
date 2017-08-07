@@ -1,9 +1,10 @@
-package strawman.collection.mutable
+package strawman.collection
+package mutable
 
-import scala.{Any, Int, Unit, Boolean}
+import scala.annotation.unchecked.uncheckedVariance
+import scala.{Any, Boolean, Int, Unit, throws}
 import scala.Int._
 import strawman.collection
-import strawman.collection.{Iterator, IterableOnce, IterableFactory, SeqLike, MonoBuildable, PolyBuildable}
 import strawman.collection.immutable.{List, Nil, ::}
 import scala.annotation.tailrec
 import java.lang.IndexOutOfBoundsException
@@ -11,14 +12,12 @@ import scala.Predef.{assert, intWrapper}
 
 /** Concrete collection type: ListBuffer */
 class ListBuffer[A]
-  extends Seq[A]
-    with SeqLike[A, ListBuffer]
-    with MonoBuildable[A, ListBuffer[A]]
-    with PolyBuildable[A, ListBuffer]
-    with Builder[A, ListBuffer[A]] {
+  extends GrowableSeq[A]
+     with SeqOps[A, ListBuffer, ListBuffer[A]]
+     with StrictOptimizedIterableOps[A, ListBuffer, ListBuffer[A]] {
 
   private var first: List[A] = Nil
-  private var last: ::[A] = null
+  private var last0: ::[A] = null
   private var aliased = false
   private var len = 0
 
@@ -26,20 +25,22 @@ class ListBuffer[A]
 
   def iterator() = first.iterator()
 
-  def fromIterable[B](coll: collection.Iterable[B]) = ListBuffer.fromIterable(coll)
+  def iterableFactory = ListBuffer
 
+  protected[this] def fromSpecificIterable(coll: collection.Iterable[A]): ListBuffer[A] = fromIterable(coll)
+
+  @throws[IndexOutOfBoundsException]
   def apply(i: Int) = first.apply(i)
 
   def length = len
   override def knownSize = len
 
-  protected[this] def newBuilderWithSameElemType = new ListBuffer[A]
-  def newBuilder[E] = new ListBuffer[E]
+  protected[this] def newSpecificBuilder(): Builder[A, ListBuffer[A]] = ListBuffer.newBuilder()
 
   private def copyElems(): Unit = {
-    val buf = ListBuffer.fromIterable(result)
+    val buf = ListBuffer.fromIterable(this)
     first = buf.first
-    last = buf.last
+    last0 = buf.last0
     aliased = false
   }
 
@@ -51,22 +52,35 @@ class ListBuffer[A]
     first
   }
 
+  /** Prepends the elements of this buffer to a given list
+    *
+    *  @param xs   the list to which elements are prepended
+    */
+  def prependToList(xs: List[A]): List[A] = {
+    if (isEmpty) xs
+    else {
+      ensureUnaliased()
+      last0.next = xs
+      toList
+    }
+  }
+
   def clear(): Unit = {
     first = Nil
   }
 
-  def +=(elem: A) = {
+  def add(elem: A) = {
     ensureUnaliased()
     val last1 = (elem :: Nil).asInstanceOf[::[A]]
-    if (len == 0) first = last1 else last.next = last1
-    last = last1
+    if (len == 0) first = last1 else last0.next = last1
+    last0 = last1
     len += 1
     this
   }
 
   private def locate(i: Int): Predecessor[A] =
     if (i == 0) null
-    else if (i == len) last
+    else if (i == len) last0
     else {
       var j = i - 1
       var p = first
@@ -106,7 +120,7 @@ class ListBuffer[A]
     val follow = getNext(prev)
     while (it.hasNext) {
       len += 1
-      val next = (it.next :: follow).asInstanceOf[::[A]]
+      val next = (it.next() :: follow).asInstanceOf[::[A]]
       setNext(prev, next)
       prev = next
     }
@@ -152,7 +166,7 @@ class ListBuffer[A]
     val buf = new ListBuffer[A]
     for (elem <- this) buf += f(elem)
     first = buf.first
-    last = buf.last
+    last0 = buf.last0
     this
   }
 
@@ -194,8 +208,6 @@ class ListBuffer[A]
     this
   }
 
-  def result = this
-
   override def className = "ListBuffer"
 }
 
@@ -203,6 +215,7 @@ object ListBuffer extends IterableFactory[ListBuffer] {
 
   def fromIterable[A](coll: collection.Iterable[A]): ListBuffer[A] = new ListBuffer[A] ++= coll
 
-  def newBuilder[A]: Builder[A, ListBuffer[A]] = new ListBuffer[A]
+  def newBuilder[A](): Builder[A, ListBuffer[A]] = new GrowableBuilder(empty[A])
 
+  def empty[A]: ListBuffer[A] = new ListBuffer[A]
 }

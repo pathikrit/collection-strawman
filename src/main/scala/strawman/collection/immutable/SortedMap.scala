@@ -1,43 +1,33 @@
 package strawman
-package collection.immutable
+package collection
+package immutable
 
-import strawman.collection.{IterablePolyTransforms, MapPolyTransforms, Sorted, SortedLike, toNewSeq}
-import strawman.collection.mutable.Builder
-
-import scala.annotation.unchecked.uncheckedVariance
 import scala.Ordering
 
 trait SortedMap[K, +V]
   extends Map[K, V]
-    with Sorted[K]
-    with SortedMapLike[K, V, SortedMap]
+     with collection.SortedMap[K, V]
+     with SortedMapOps[K, V, SortedMap, SortedMap[K, V]]
 
-trait SortedMapLike[K, +V, +C[X, +Y] <: SortedMap[X, Y]]
-  extends SortedLike[K, C[K, V]]
-    with SortedMapPolyTransforms[K, V, C]
-    with MapLike[K, V, Map] // Inherited Map operations can only return a `Map` because they don’t take an evidence `Ordering`
-    with MapMonoTransforms[K, V, C[K, V]] // Operations that return the same collection type can return a `SortedMap`, though
+trait SortedMapOps[K, +V, +CC[X, +Y] <: SortedMap[X, Y] with SortedMapOps[X, Y, CC, _], +C <: SortedMap[K, V]]
+  extends MapOps[K, V, Map, C]
+     with collection.SortedMapOps[K, V, CC, C] {
 
-/** Polymorphic transformation methods for sorted Maps */
-trait SortedMapPolyTransforms[K, +V, +C[X, Y] <: Sorted[X]]
-  // We inherit polymorphic transformations returning an Iterable (e.g. to
-  // support the following use case `kvs.map((k, v) => v)`)
-  extends IterablePolyTransforms[(K, V), Iterable]
-  // Then we also inherit polymorphic transformations returning a Map, just
-  // to get inheritance linearization right and disambiguate between
-  // overloaded methods
-    with MapPolyTransforms[K, V, Map] {
+    protected[this] def coll: CC[K, V]
 
-  // And finally, we add new overloads taking an ordering
-  def map[K2, V2](f: (K, V) => (K2, V2))(implicit ordering: Ordering[K2]): C[K2, V2]
+    protected def mapFromIterable[K2, V2](it: collection.Iterable[(K2, V2)]): Map[K2, V2] =
+      Map.fromIterable(it)
 
-  /**
-    * Add a key/value pair to this map, returning a new map.
-    *
-    * @param kv the key/value pair.
-    * @tparam V1 the type of the value in the key/value pair.
-    * @return A new map with the new binding added to this map.
-    */
-  def + [V1 >: V](kv: (K, V1)): C[K, V1]
+    // We override these methods to fix their return type (which would be `Map` otherwise)
+    def updated[V1 >: V](key: K, value: V1): CC[K, V1]
+    override def + [V1 >: V](kv: (K, V1)): CC[K, V1] = updated(kv._1, kv._2)
+
+    override def concat[V2 >: V](xs: collection.Iterable[(K, V2)]): CC[K, V2] = {
+        var result: CC[K, V2] = coll
+        val it = xs.iterator()
+        while (it.hasNext) result = result + it.next()
+        result
+    }
 
 }
+

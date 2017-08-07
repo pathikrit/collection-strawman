@@ -1,32 +1,22 @@
 package strawman.collection.mutable
 
 import strawman.collection
-import strawman.collection.IterableOnce
-import scala.{Int, Boolean, Unit, Option, Some, None}
-import scala.Predef.???
+import strawman.collection.{IterableFactory, IterableOnce}
+
+import scala.{Boolean, Int, None, Option, Some, Unit, `inline`}
 
 /** Base trait for mutable sets */
 trait Set[A]
-  extends collection.Set[A]
-    with SetLike[A, Set]
-    with Growable[A] {
+  extends GrowableIterable[A]
+    with collection.Set[A]
+    with SetOps[A, Set, Set[A]]
+    with Shrinkable[A]
 
-  def +=(elem: A): this.type
-  def -=(elem: A): this.type
+trait SetOps[A, +CC[X], +C <: Set[A]]
+  extends IterableOps[A, CC, C]
+    with collection.SetOps[A, CC, C] {
 
-  def contains(elem: A): Boolean
-  def get(elem: A): Option[A]
-
-  def insert(elem: A): Boolean =
-    !contains(elem) && { +=(elem); true }
-
-  def remove(elem: A): Option[A] = {
-    val res = get(elem)
-    -=(elem)
-    res
-  }
-
-  def mapInPlace(f: A => A): Unit = {
+  def mapInPlace(f: A => A): this.type = {
     val toAdd = Set[A]()
     val toRemove = Set[A]()
     for (elem <- this) {
@@ -36,11 +26,32 @@ trait Set[A]
         toRemove -= elem
       }
     }
-    for (elem <- toRemove) +=(elem)
-    for (elem <- toAdd) -=(elem)
+    for (elem <- toRemove) coll -= elem
+    for (elem <- toAdd) coll += elem
+    this
   }
 
-  def flatMapInPlace(f: A => IterableOnce[A]): Unit = {
+  /**
+    * @return The reference of the contained element that is equal to `elem`, if found, otherwise `None`
+    * @param elem The element to get.
+    */
+  def get(elem: A): Option[A]
+
+  def insert(elem: A): Boolean =
+    !contains(elem) && {
+      coll += elem; true
+    }
+
+  def remove(elem: A): Option[A] = {
+    val res = get(elem)
+    coll -= elem
+    res
+  }
+
+  def diff(that: collection.Set[A]): C =
+    coll.foldLeft(empty)((result, elem) => if (that contains elem) result else result += elem)
+
+  def flatMapInPlace(f: A => IterableOnce[A]): this.type = {
     val toAdd = Set[A]()
     val toRemove = Set[A]()
     for (elem <- this)
@@ -49,26 +60,22 @@ trait Set[A]
           toAdd += mapped
           toRemove -= elem
         }
-    for (elem <- toRemove) -=(elem)
-    for (elem <- toAdd) +=(elem)
+    for (elem <- toRemove) coll -= elem
+    for (elem <- toAdd) coll += elem
+    this
   }
 
-  def filterInPlace(p: A => Boolean): Unit = {
+  def filterInPlace(p: A => Boolean): this.type = {
     val toRemove = Set[A]()
     for (elem <- this)
       if (!p(elem)) toRemove += elem
     for (elem <- toRemove)
-      -=(elem)
+      coll -= elem
+    this
   }
+
+  override def clone(): C = empty ++= coll
+
 }
 
-object Set {
-  def apply[A](xs: A*): Set[A] = ???
-}
-
-trait SetLike[A, +C[X] <: Set[X]]
-  extends collection.SetLike[A, C]
-    with SetMonoTransforms[A, C[A]]
-
-trait SetMonoTransforms[A, +Repr]
-  extends collection.SetMonoTransforms[A, Repr]
+object Set extends IterableFactory.Delegate[Set](HashSet)

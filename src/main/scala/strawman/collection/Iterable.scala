@@ -3,16 +3,19 @@ package collection
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.reflect.ClassTag
-import scala.{Any, Array, Boolean, Int, StringContext, Unit}
+import scala.{Any, Array, Boolean, `inline`, Int, None, Numeric, Option, Ordering, PartialFunction, StringContext, Some, Unit}
 import java.lang.{String, UnsupportedOperationException}
+import scala.Predef.<:<
 
 import strawman.collection.mutable.{ArrayBuffer, Builder, StringBuilder}
 import java.lang.String
 
 /** Base trait for generic collections */
-trait Iterable[+A] extends IterableOnce[A] with IterableLike[A, Iterable] {
+trait Iterable[+A] extends IterableOnce[A] with IterableOps[A, Iterable, Iterable[A]] {
+
   /** The collection itself */
-  protected def coll: this.type = this
+  protected[this] def coll: this.type = this
+
 }
 
 /** Base trait for Iterable operations
@@ -21,52 +24,212 @@ trait Iterable[+A] extends IterableOnce[A] with IterableLike[A, Iterable] {
   *  ============
   *
   *  We require that for all child classes of Iterable the variance of
-  *  the child class and the variance of the `C` parameter passed to `IterableLike`
+  *  the child class and the variance of the `C` parameter passed to `IterableOps`
   *  are the same. We cannot express this since we lack variance polymorphism. That's
   *  why we have to resort at some places to write `C[A @uncheckedVariance]`.
-  *
   */
-trait IterableLike[+A, +C[X] <: Iterable[X]]
-  extends FromIterable[C]
-    with IterableOps[A]
-    with IterableMonoTransforms[A, C[A @uncheckedVariance]] // sound bcs of VarianceNote
-    with IterablePolyTransforms[A, C] {
+trait IterableOps[+A, +CC[X], +C] extends Any {
 
-  /** Create a collection of type `C[A]` from the elements of `coll`, which has
-    *  the same element type as this collection. Overridden in StringOps and ArrayOps.
+  protected[this] def coll: Iterable[A]
+
+  protected[this] def fromSpecificIterable(coll: Iterable[A]): C
+
+  protected[this] def fromIterable[E](it: Iterable[E]): CC[E] = iterableFactory.fromIterable(it)
+
+  def iterableFactory: IterableFactory[CC]
+
+  /**
+    * @return a strict builder for the same collection type.
+    *
+    * Note that in the case of lazy collections (e.g. [[View]] or [[immutable.LazyList]]),
+    * it is possible to implement this method but the resulting `Builder` will break laziness.
+    * As a consequence, operations should preferably be implemented on top of views rather
+    * than builders.
     */
-  protected[this] def fromIterableWithSameElemType(coll: Iterable[A]): C[A]
-}
+  protected[this] def newSpecificBuilder(): Builder[A, C]
 
-/** Operations over iterables. No operation defined here is generic in the
-  *  type of the underlying collection.
-  */
-trait IterableOps[+A] extends Any {
-  protected def coll: Iterable[A]
-  private def iterator(): Iterator[A] = coll.iterator()
+  // Consumes all the collection!
+  protected[this] def reversed: Iterable[A] = {
+    var xs: immutable.List[A] = immutable.Nil
+    val it = coll.iterator()
+    while (it.hasNext) xs = it.next() :: xs
+    xs
+  }
 
   /** Apply `f` to each element for its side effects
    *  Note: [U] parameter needed to help scalac's type inference.
    */
-  def foreach[U](f: A => U): Unit = iterator().foreach(f)
+  def foreach[U](f: A => U): Unit = coll.iterator().foreach(f)
+
+  /** Tests whether a predicate holds for all elements of this $coll.
+   *
+   *  $mayNotTerminateInf
+   *
+   *  @param   p     the predicate used to test elements.
+   *  @return        `true` if this $coll is empty or the given predicate `p`
+   *                 holds for all elements of this $coll, otherwise `false`.
+   */
+  def forall(p: A => Boolean): Boolean = coll.iterator().forall(p)
+
+  /** Tests whether a predicate holds for at least one element of this $coll.
+   *
+   *  $mayNotTerminateInf
+   *
+   *  @param   p     the predicate used to test elements.
+   *  @return        `true` if the given predicate `p` is satisfied by at least one element of this $coll, otherwise `false`
+   */
+  def exists(p: A => Boolean): Boolean = coll.iterator().exists(p)
+
+  /** Counts the number of elements in the $coll which satisfy a predicate.
+   *
+   *  @param p     the predicate  used to test elements.
+   *  @return      the number of elements satisfying the predicate `p`.
+   */
+  def count(p: A => Boolean): Int = coll.iterator().count(p)
+
+  /** Finds the first element of the $coll satisfying a predicate, if any.
+    *
+    *  $mayNotTerminateInf
+    *  $orderDependent
+    *
+    *  @param p       the predicate used to test elements.
+    *  @return        an option value containing the first element in the $coll
+    *                 that satisfies `p`, or `None` if none exists.
+    */
+  def find(p: A => Boolean): Option[A] = coll.iterator().find(p)
 
   /** Fold left */
-  def foldLeft[B](z: B)(op: (B, A) => B): B = iterator().foldLeft(z)(op)
+  def foldLeft[B](z: B)(op: (B, A) => B): B = coll.iterator().foldLeft(z)(op)
 
   /** Fold right */
-  def foldRight[B](z: B)(op: (A, B) => B): B = iterator().foldRight(z)(op)
+  def foldRight[B](z: B)(op: (A, B) => B): B = coll.iterator().foldRight(z)(op)
 
-  /** The index of the first element in this collection for which `p` holds. */
-  def indexWhere(p: A => Boolean): Int = iterator().indexWhere(p)
+  /** Reduces the elements of this $coll using the specified associative binary operator.
+   *
+   *  $undefinedorder
+   *
+   *  @tparam B      A type parameter for the binary operator, a supertype of `A`.
+   *  @param op       A binary operator that must be associative.
+   *  @return         The result of applying reduce operator `op` between all the elements if the $coll is nonempty.
+   *  @throws UnsupportedOperationException
+   *  if this $coll is empty.
+   */
+  def reduce[B >: A](op: (B, B) => B): B = reduceLeft(op)
+
+  /** Reduces the elements of this $coll, if any, using the specified
+   *  associative binary operator.
+   *
+   *  $undefinedorder
+   *
+   *  @tparam B     A type parameter for the binary operator, a supertype of `A`.
+   *  @param op      A binary operator that must be associative.
+   *  @return        An option value containing result of applying reduce operator `op` between all
+   *                 the elements if the collection is nonempty, and `None` otherwise.
+   */
+  def reduceOption[B >: A](op: (B, B) => B): Option[B] = reduceLeftOption(op)
+
+  /** Applies a binary operator to all elements of this $coll,
+   *  going left to right.
+   *  $willNotTerminateInf
+   *  $orderDependentFold
+   *
+   *  @param  op    the binary operator.
+   *  @tparam  B    the result type of the binary operator.
+   *  @return  the result of inserting `op` between consecutive elements of this $coll,
+   *           going left to right:
+   *           {{{
+   *             op( op( ... op(x_1, x_2) ..., x_{n-1}), x_n)
+   *           }}}
+   *           where `x,,1,,, ..., x,,n,,` are the elements of this $coll.
+   *  @throws UnsupportedOperationException if this $coll is empty.   */
+  def reduceLeft[B >: A](op: (B, A) => B): B = {
+    if (isEmpty)
+      throw new UnsupportedOperationException("empty.reduceLeft")
+
+    var first = true
+    var acc: B = 0.asInstanceOf[B]
+
+    for (x <- coll) {
+      if (first) {
+        acc = x
+        first = false
+      }
+      else acc = op(acc, x)
+    }
+    acc
+  }
+
+  /** Applies a binary operator to all elements of this $coll, going right to left.
+   *  $willNotTerminateInf
+   *  $orderDependentFold
+   *
+   *  @param  op    the binary operator.
+   *  @tparam  B    the result type of the binary operator.
+   *  @return  the result of inserting `op` between consecutive elements of this $coll,
+   *           going right to left:
+   *           {{{
+   *             op(x_1, op(x_2, ..., op(x_{n-1}, x_n)...))
+   *           }}}
+   *           where `x,,1,,, ..., x,,n,,` are the elements of this $coll.
+   *  @throws UnsupportedOperationException if this $coll is empty.
+   */
+  def reduceRight[B >: A](op: (A, B) => B): B = {
+    if (isEmpty)
+      throw new UnsupportedOperationException("empty.reduceRight")
+
+    reversed.reduceLeft[B]((x, y) => op(y, x))
+  }
+
+  /** Optionally applies a binary operator to all elements of this $coll, going left to right.
+   *  $willNotTerminateInf
+   *  $orderDependentFold
+   *
+   *  @param  op    the binary operator.
+   *  @tparam  B    the result type of the binary operator.
+   *  @return  an option value containing the result of `reduceLeft(op)` if this $coll is nonempty,
+   *           `None` otherwise.
+   */
+  def reduceLeftOption[B >: A](op: (B, A) => B): Option[B] = if (isEmpty) None else Some(reduceLeft(op))
+
+  /** Optionally applies a binary operator to all elements of this $coll, going
+   *  right to left.
+   *  $willNotTerminateInf
+   *  $orderDependentFold
+   *
+   *  @param  op    the binary operator.
+   *  @tparam  B    the result type of the binary operator.
+   *  @return  an option value containing the result of `reduceRight(op)` if this $coll is nonempty,
+   *           `None` otherwise.
+   */
+  def reduceRightOption[B >: A](op: (A, B) => B): Option[B] = if (isEmpty) None else Some(reduceRight(op))
 
   /** Is the collection empty? */
-  def isEmpty: Boolean = !iterator().hasNext
+  def isEmpty: Boolean = !coll.iterator().hasNext
 
   /** Is the collection not empty? */
-  def nonEmpty: Boolean = iterator().hasNext
+  def nonEmpty: Boolean = coll.iterator().hasNext
 
   /** The first element of the collection. */
-  def head: A = iterator().next()
+  def head: A = coll.iterator().next()
+
+  /** Selects the last element.
+    * $orderDependent
+    * @return The last element of this $coll.
+    * @throws NoSuchElementException If the $coll is empty.
+    */
+  def last: A = {
+    val it = coll.iterator()
+    var lst = it.next()
+    while (it.hasNext) lst = it.next()
+    lst
+  }
+
+  /** Optionally selects the last element.
+    *  $orderDependent
+    *  @return  the last element of this $coll$ if it is nonempty,
+    *           `None` if it is empty.
+    */
+  def lastOption: Option[A] = if (isEmpty) None else Some(last)
 
   /** The number of elements in this collection, if it can be cheaply computed,
     *  -1 otherwise. Cheaply usually means: Not requiring a collection traversal.
@@ -76,10 +239,10 @@ trait IterableOps[+A] extends Any {
   /** The number of elements in this collection. Does not terminate for
     *  infinite collections.
     */
-  def size: Int = if (knownSize >= 0) knownSize else iterator().length
+  def size: Int = if (knownSize >= 0) knownSize else coll.iterator().length
 
   /** A view representing the elements of this collection. */
-  def view: View[A] = View.fromIterator(iterator())
+  def view: View[A] = View.fromIterator(coll.iterator())
 
   /** Given a collection factory `fi`, convert this collection to the appropriate
     * representation for the current element type `A`. Example uses:
@@ -88,12 +251,7 @@ trait IterableOps[+A] extends Any {
     *      xs.to(ArrayBuffer)
     *      xs.to(BitSet) // for xs: Iterable[Int]
     */
-  def to(bf: BuildFrom[Iterable[A], A]): bf.To = bf.fromIterable(coll)(coll)
-  // Note that `bf` is not implicit. We never want it to be inferred (because a collection could only rebuild itself
-  // that way) but we do rely on the implicit conversions from the various factory types to BuildFrom.
-
-  /** Optimized version of `to(BuildFrom)` */
-  def to(fi: BoundedIterableFactory[A]): fi.To[A @uncheckedVariance] = fi.fromIterable(coll)
+  def to[C1](f: CanBuild[A, C1]): C1 = f.fromSpecificIterable(coll)
 
   /** Convert collection to array. */
   def toArray[B >: A: ClassTag]: Array[B] =
@@ -103,7 +261,7 @@ trait IterableOps[+A] extends Any {
   /** Copy all elements of this collection to array `xs`, starting at `start`. */
   def copyToArray[B >: A](xs: Array[B], start: Int = 0): xs.type = {
     var i = start
-    val it = iterator()
+    val it = coll.iterator()
     while (it.hasNext) {
       xs(i) = it.next()
       i += 1
@@ -119,32 +277,245 @@ trait IterableOps[+A] extends Any {
   def className = getClass.getName
 
   /** A string showing all elements of this collection, separated by string `sep`. */
-  def mkString(sep: String): String = {
+  def mkString(start: String, sep: String, end: String): String = {
     var first: Boolean = true
     val b = new StringBuilder()
+    b ++= start
     foreach { elem =>
       if (!first) b ++= sep
       first = false
       b ++= String.valueOf(elem)
     }
-    b.result
+    b ++= end
+    b.result()
   }
+
+  def mkString(sep: String): String = mkString("", sep, "")
+
+  def mkString: String = mkString("")
 
   override def toString = s"$className(${mkString(", ")})"
 
-}
 
+  /** Sums up the elements of this collection.
+    *
+    *   @param   num  an implicit parameter defining a set of numeric operations
+    *                 which includes the `+` operator to be used in forming the sum.
+    *   @tparam  B    the result type of the `+` operator.
+    *   @return       the sum of all elements of this $coll with respect to the `+` operator in `num`.
+    *
+    *   @usecase def sum: A
+    *     @inheritdoc
+    *
+    *     @return       the sum of all elements in this $coll of numbers of type `Int`.
+    *     Instead of `Int`, any other type `T` with an implicit `Numeric[T]` implementation
+    *     can be used as element type of the $coll and as result type of `sum`.
+    *     Examples of such types are: `Long`, `Float`, `Double`, `BigInt`.
+    *
+    */
+  def sum[B >: A](implicit num: Numeric[B]): B = foldLeft(num.zero)(num.plus)
 
-/** Type-preserving transforms over iterables.
-  *  Operations defined here return in their result iterables of the same type
-  *  as the one they are invoked on.
-  */
-trait IterableMonoTransforms[+A, +Repr] extends Any {
-  protected def coll: Iterable[A]
-  protected[this] def fromIterableWithSameElemType(coll: Iterable[A]): Repr
+  /** Multiplies up the elements of this collection.
+   *
+   *   @param   num  an implicit parameter defining a set of numeric operations
+   *                 which includes the `*` operator to be used in forming the product.
+   *   @tparam  B   the result type of the `*` operator.
+   *   @return       the product of all elements of this $coll with respect to the `*` operator in `num`.
+   *
+   *   @usecase def product: A
+   *     @inheritdoc
+   *
+   *     @return       the product of all elements in this $coll of numbers of type `Int`.
+   *     Instead of `Int`, any other type `T` with an implicit `Numeric[T]` implementation
+   *     can be used as element type of the $coll and as result type of `product`.
+   *     Examples of such types are: `Long`, `Float`, `Double`, `BigInt`.
+   */
+  def product[B >: A](implicit num: Numeric[B]): B = foldLeft(num.one)(num.times)
 
-  /** All elements satisfying predicate `p` */
-  def filter(p: A => Boolean): Repr = fromIterableWithSameElemType(View.Filter(coll, p))
+  /** Finds the smallest element.
+   *
+   *  @param    ord   An ordering to be used for comparing elements.
+   *  @tparam   B    The type over which the ordering is defined.
+   *  @return   the smallest element of this $coll with respect to the ordering `ord`.
+   *
+   *  @usecase def min: A
+   *    @inheritdoc
+   *
+   *    @return   the smallest element of this $coll
+   */
+  def min[B >: A](implicit ord: Ordering[B]): A = {
+    if (isEmpty)
+      throw new UnsupportedOperationException("empty.min")
+
+    reduceLeft((x, y) => if (ord.lteq(x, y)) x else y)
+  }
+
+  /** Finds the largest element.
+   *
+   *  @param    ord   An ordering to be used for comparing elements.
+   *  @tparam   B    The type over which the ordering is defined.
+   *  @return   the largest element of this $coll with respect to the ordering `ord`.
+   *
+   *  @usecase def max: A
+   *    @inheritdoc
+   *
+   *    @return   the largest element of this $coll.
+   */
+  def max[B >: A](implicit ord: Ordering[B]): A = {
+    if (isEmpty)
+      throw new UnsupportedOperationException("empty.max")
+
+    reduceLeft((x, y) => if (ord.gteq(x, y)) x else y)
+  }
+
+  /** Finds the first element which yields the largest value measured by function f.
+   *
+   *  @param    cmp   An ordering to be used for comparing elements.
+   *  @tparam   B     The result type of the function f.
+   *  @param    f     The measuring function.
+   *  @return   the first element of this $coll with the largest value measured by function f
+   *  with respect to the ordering `cmp`.
+   *
+   *  @usecase def maxBy[B](f: A => B): A
+   *    @inheritdoc
+   *
+   *    @return   the first element of this $coll with the largest value measured by function f.
+   */
+  def maxBy[B](f: A => B)(implicit cmp: Ordering[B]): A = {
+    if (isEmpty)
+      throw new UnsupportedOperationException("empty.maxBy")
+
+    var maxF: B = null.asInstanceOf[B]
+    var maxElem: A = null.asInstanceOf[A]
+    var first = true
+
+    for (elem <- coll) {
+      val fx = f(elem)
+      if (first || cmp.gt(fx, maxF)) {
+        maxElem = elem
+        maxF = fx
+        first = false
+      }
+    }
+    maxElem
+  }
+
+  /** Finds the first element which yields the smallest value measured by function f.
+   *
+   *  @param    cmp   An ordering to be used for comparing elements.
+   *  @tparam   B     The result type of the function f.
+   *  @param    f     The measuring function.
+   *  @return   the first element of this $coll with the smallest value measured by function f
+   *  with respect to the ordering `cmp`.
+   *
+   *  @usecase def minBy[B](f: A => B): A
+   *    @inheritdoc
+   *
+   *    @return   the first element of this $coll with the smallest value measured by function f.
+   */
+  def minBy[B](f: A => B)(implicit cmp: Ordering[B]): A = {
+    if (isEmpty)
+      throw new UnsupportedOperationException("empty.minBy")
+
+    var minF: B = null.asInstanceOf[B]
+    var minElem: A = null.asInstanceOf[A]
+    var first = true
+
+    for (elem <- coll) {
+      val fx = f(elem)
+      if (first || cmp.lt(fx, minF)) {
+        minElem = elem
+        minF = fx
+        first = false
+      }
+    }
+    minElem
+  }
+
+  /** Selects all elements of this $coll which satisfy a predicate.
+    *
+    *  @param pred  the predicate used to test elements.
+    *  @return      a new $coll consisting of all elements of this $coll that satisfy the given
+    *               predicate `pred`. Their order may not be preserved.
+    */
+  def filter(pred: A => Boolean): C = fromSpecificIterable(View.Filter(coll, pred))
+
+  /** Selects all elements of this $coll which do not satisfy a predicate.
+    *
+    *  @param pred  the predicate used to test elements.
+    *  @return      a new $coll consisting of all elements of this $coll that do not satisfy the given
+    *               predicate `pred`. Their order may not be preserved.
+    */
+  def filterNot(pred: A => Boolean): C = fromSpecificIterable(View.Filter(coll, (a: A) => !pred(a)))
+
+  /** Creates a non-strict filter of this $coll.
+    *
+    *  Note: the difference between `c filter p` and `c withFilter p` is that
+    *        the former creates a new collection, whereas the latter only
+    *        restricts the domain of subsequent `map`, `flatMap`, `foreach`,
+    *        and `withFilter` operations.
+    *  $orderDependent
+    *
+    *  @param p   the predicate used to test elements.
+    *  @return    an object of class `WithFilter`, which supports
+    *             `map`, `flatMap`, `foreach`, and `withFilter` operations.
+    *             All these operations apply to those elements of this $coll
+    *             which satisfy the predicate `p`.
+    */
+  def withFilter(p: A => Boolean): WithFilter = new WithFilter(p)
+
+  /** A template trait that contains just the `map`, `flatMap`, `foreach` and `withFilter` methods
+    *  of trait `Iterable`.
+    */
+  class WithFilter(p: A => Boolean) {
+
+    protected[this] def filtered = View.Filter(coll, p)
+
+    /** Builds a new collection by applying a function to all elements of the
+      * `filtered` outer $coll.
+      *
+      *  @param f      the function to apply to each element.
+      *  @tparam B     the element type of the returned collection.
+      *  @return       a new $coll resulting from applying
+      *                the given function `f` to each element of the filtered outer $coll
+      *                and collecting the results.
+      */
+    def map[B](f: A => B): CC[B] = iterableFactory.fromIterable(View.Map(filtered, f))
+
+    /** Builds a new collection by applying a function to all elements of the
+      * `filtered` outer $coll containing this `WithFilter` instance that satisfy
+      *
+      *  @param f      the function to apply to each element.
+      *  @tparam B     the element type of the returned collection.
+      *  @return       a new $coll resulting from applying
+      *                the given collection-valued function `f` to each element
+      *                of the filtered outer $coll and
+      *                concatenating the results.
+      */
+    def flatMap[B](f: A => IterableOnce[B]): CC[B] = iterableFactory.fromIterable(View.FlatMap(filtered, f))
+
+    /** Applies a function `f` to all elements of the `filtered` outer $coll.
+      *
+      *  @param  f   the function that is applied for its side-effect to every element.
+      *              The result of function `f` is discarded.
+      *
+      *  @tparam  U  the type parameter describing the result of function `f`.
+      *              This result will always be ignored. Typically `U` is `Unit`,
+      *              but this is not necessary.
+      */
+    def foreach[U](f: A => U): Unit = filtered.foreach(f)
+
+    /** Further refines the filter for this `filtered` $coll.
+      *
+      *  @param q   the predicate used to test elements.
+      *  @return    an object of class `WithFilter`, which supports
+      *             `map`, `flatMap`, `foreach`, and `withFilter` operations.
+      *             All these operations apply to those elements of this $coll which
+      *             also satisfy both `p` and `q` predicates.
+      */
+    def withFilter(q: A => Boolean): WithFilter = new WithFilter(a => p(a) && q(a))
+
+  }
 
   /** A pair of, first, all elements that satisfy prediacte `p` and, second,
     *  all elements that do not. Interesting because it splits a collection in two.
@@ -153,119 +524,345 @@ trait IterableMonoTransforms[+A, +Repr] extends Any {
     *  Strict collections have an overridden version of `partition` in `Buildable`,
     *  which requires only a single traversal.
     */
-  def partition(p: A => Boolean): (Repr, Repr) = {
+  def partition(p: A => Boolean): (C, C) = {
     val pn = View.Partition(coll, p)
-    (fromIterableWithSameElemType(pn.left), fromIterableWithSameElemType(pn.right))
+    (fromSpecificIterable(pn.first), fromSpecificIterable(pn.second))
   }
 
+  /** Splits this $coll into two at a given position.
+    *  Note: `c splitAt n` is equivalent to (but possibly more efficient than)
+    *         `(c take n, c drop n)`.
+    *  $orderDependent
+    *
+    *  @param n the position at which to split.
+    *  @return  a pair of ${coll}s consisting of the first `n`
+    *           elements of this $coll, and the other elements.
+    */
+  def splitAt(n: Int): (C, C) = (take(n), drop(n))
+
   /** A collection containing the first `n` elements of this collection. */
-  def take(n: Int): Repr = fromIterableWithSameElemType(View.Take(coll, n))
+  def take(n: Int): C = fromSpecificIterable(View.Take(coll, n))
+
+  /** A collection containing the last `n` elements of this collection. */
+  def takeRight(n: Int): C = {
+    val b = newSpecificBuilder()
+    b.sizeHintBounded(n, coll)
+    val lead = coll.iterator() drop n
+    val it = coll.iterator()
+    while (lead.hasNext) {
+      lead.next()
+      it.next()
+    }
+    while (it.hasNext) b += it.next()
+    b.result()
+  }
+
+  /** Takes longest prefix of elements that satisfy a predicate.
+    *  $orderDependent
+    *  @param   p  The predicate used to test elements.
+    *  @return  the longest prefix of this $coll whose elements all satisfy
+    *           the predicate `p`.
+    */
+  def takeWhile(p: A => Boolean): C = fromSpecificIterable(View.TakeWhile(coll, p))
+
+  /** Splits this $coll into a prefix/suffix pair according to a predicate.
+    *
+    *  Note: `c span p`  is equivalent to (but possibly more efficient than)
+    *  `(c takeWhile p, c dropWhile p)`, provided the evaluation of the
+    *  predicate `p` does not cause any side-effects.
+    *  $orderDependent
+    *
+    *  @param p the test predicate
+    *  @return  a pair consisting of the longest prefix of this $coll whose
+    *           elements all satisfy `p`, and the rest of this $coll.
+    */
+  def span(p: A => Boolean): (C, C) = (takeWhile(p), dropWhile(p))
 
   /** The rest of the collection without its `n` first elements. For
     *  linear, immutable collections this should avoid making a copy.
     */
-  def drop(n: Int): Repr = fromIterableWithSameElemType(View.Drop(coll, n))
+  def drop(n: Int): C = fromSpecificIterable(View.Drop(coll, n))
+
+  /** The rest of the collection without its `n` last elements. For
+    *  linear, immutable collections this should avoid making a copy.
+    */
+  def dropRight(n: Int): C = {
+    val b = newSpecificBuilder()
+    if (n >= 0) b.sizeHint(coll, delta = -n)
+    val lead = coll.iterator() drop n
+    val it = coll.iterator()
+    while (lead.hasNext) {
+      b += it.next()
+      lead.next()
+    }
+    b.result()
+  }
+
+  /** Skips longest sequence of elements of this iterator which satisfy given
+    *  predicate `p`, and returns an iterator of the remaining elements.
+    *
+    *  @param p the predicate used to skip elements.
+    *  @return  an iterator consisting of the remaining elements
+    *  @note    Reuse: $consumesAndProducesIterator
+    */
+  def dropWhile(p: A => Boolean): C = fromSpecificIterable(View.DropWhile(coll, p))
+
+  /** Partitions elements in fixed size ${coll}s.
+   *  @see [[scala.collection.Iterator]], method `grouped`
+   *
+   *  @param size the number of elements per group
+   *  @return An iterator producing ${coll}s of size `size`, except the
+   *          last will be less than size `size` if the elements don't divide evenly.
+   */
+  def grouped(size: Int): Iterator[C] =
+    coll.iterator().grouped(size).map(fromSpecificIterable)
+
+  /** Groups elements in fixed size blocks by passing a "sliding window"
+    *  over them (as opposed to partitioning them, as is done in `grouped`.)
+    *  The "sliding window" step is set to one.
+    *  @see [[scala.collection.Iterator]], method `sliding`
+    *
+    *  @param size the number of elements per group
+    *  @return An iterator producing ${coll}s of size `size`, except the
+    *          last element (which may be the only element) will be truncated
+    *          if there are fewer than `size` elements remaining to be grouped.
+    */
+  def sliding(size: Int): Iterator[C] = sliding(size, 1)
+
+  /** Groups elements in fixed size blocks by passing a "sliding window"
+    *  over them (as opposed to partitioning them, as is done in grouped.)
+    *  @see [[scala.collection.Iterator]], method `sliding`
+    *
+    *  @param size the number of elements per group
+    *  @param step the distance between the first elements of successive
+    *         groups
+    *  @return An iterator producing ${coll}s of size `size`, except the
+    *          last element (which may be the only element) will be truncated
+    *          if there are fewer than `size` elements remaining to be grouped.
+    */
+  def sliding(size: Int, step: Int): Iterator[C] =
+    coll.iterator().sliding(size, step).map(fromSpecificIterable)
 
   /** The rest of the collection without its first element. */
-  def tail: Repr = {
+  def tail: C = {
     if (coll.isEmpty) throw new UnsupportedOperationException
     drop(1)
   }
-}
 
-/** Transforms over iterables that can return collections of different element types.
-  */
-trait IterablePolyTransforms[+A, +C[_]] extends Any {
-  protected def coll: Iterable[A]
-  def fromIterable[B](coll: Iterable[B]): C[B]
-
-  /** Map */
-  def map[B](f: A => B): C[B] = fromIterable(View.Map(coll, f))
-
-  /** Flatmap */
-  def flatMap[B](f: A => IterableOnce[B]): C[B] = fromIterable(View.FlatMap(coll, f))
-
-  /** Concatenation */
-  def ++[B >: A](xs: IterableOnce[B]): C[B] = fromIterable(View.Concat(coll, xs))
-
-  /** Zip. Interesting because it requires to align to source collections. */
-  def zip[B](xs: IterableOnce[B]): C[(A @uncheckedVariance, B)] = fromIterable(View.Zip(coll, xs))
-  // sound bcs of VarianceNote
-}
-
-/** Transforms over iterables that can return collections of different element types for which an implicit
-  * evidence is required. Every constrained collection type `CC` extends an unconstrained collection type `C`
-  * (e.g. `SortedSet[X] extends Set[X]`) so it inherits methods from `IterablePolyTransforms` that do not require
-  * the implicit evidence. These methods can only build a default representation of `C` (e.g. a `HashSet` in the
-  * case of `Set`). The methods in this trait are the same as the ones in `IterablePolyTransforms` but they do
-  * require the implicit evidence, so they can build a new instance of `CC`.
-  */
-trait ConstrainedIterablePolyTransforms[+A, +C[_], +CC[X] <: C[X]] extends Any with IterablePolyTransforms[A, C] {
-  type Ev[_]
-
-  protected def coll: Iterable[A]
-  protected def constrainedFromIterable[B: Ev](it: Iterable[B]): CC[B]
-
-  /** Map */
-  def map[B : Ev](f: A => B): CC[B] = constrainedFromIterable(View.Map(coll, f))
-
-  /** Flatmap */
-  def flatMap[B : Ev](f: A => IterableOnce[B]): CC[B] = constrainedFromIterable(View.FlatMap(coll, f))
-
-  /** Concatenation */
-  def ++[B >: A : Ev](xs: IterableOnce[B]): CC[B] = constrainedFromIterable(View.Concat(coll, xs))
-
-  /** Zip. Interesting because it requires to align to source collections. */
-  def zip[B](xs: IterableOnce[B])(implicit ev: Ev[(A @uncheckedVariance, B)]): CC[(A @uncheckedVariance, B)] = constrainedFromIterable(View.Zip(coll, xs))
-  // sound bcs of VarianceNote
-
-  def collect[B: Ev](pf: scala.PartialFunction[A, B]): CC[B] = flatMap(a => 
-    if (pf.isDefinedAt(a)) View.Elems(pf(a))
-    else View.Empty
-  )
-
-  /** Widen this collection to the most specific unconstrained collection type. This is required in order to
-    * call methods from `IterablePolyTransforms` to build a new unconstrained collection when no implicit evidence
-    * is available. */
-  def unconstrained: C[A @uncheckedVariance]
-}
-
-/** Base trait for strict collections that can be built using a builder.
-  * @tparam  A    the element type of the collection
-  * @tparam Repr  the type of the underlying collection
-  */
-trait MonoBuildable[+A, +Repr] extends Any with IterableMonoTransforms[A, Repr]  {
-
-  /** Creates a new builder. */
-  protected[this] def newBuilderWithSameElemType: Builder[A, Repr]
-
-  /** Optimized, push-based version of `partition`. */
-  override def partition(p: A => Boolean): (Repr, Repr) = {
-    val l, r = newBuilderWithSameElemType
-    coll.iterator().foreach(x => (if (p(x)) l else r) += x)
-    (l.result, r.result)
+  /** The initial part of the collection without its last element. */
+  def init: C = {
+    if (coll.isEmpty) throw new UnsupportedOperationException
+    dropRight(1)
   }
 
-  // one might also override other transforms here to avoid generating
-  // iterators if it helps efficiency.
-}
+  /** Selects an interval of elements.  The returned collection is made up
+    *  of all elements `x` which satisfy the invariant:
+    *  {{{
+    *    from <= indexOf(x) < until
+    *  }}}
+    *  $orderDependent
+    *
+    *  @param from   the lowest index to include from this $coll.
+    *  @param until  the lowest index to EXCLUDE from this $coll.
+    *  @return  a $coll containing the elements greater than or equal to
+    *           index `from` extending up to (but not including) index `until`
+    *           of this $coll.
+    */
+  def slice(from: Int, until: Int): C =
+    fromSpecificIterable(View.Take(View.Drop(coll, from), until - from))
 
-/** Base trait for strict collections that can be built for arbitrary element types using a builder.
-  * @tparam  A    the element type of the collection
-  * @tparam C     the type constructor of the underlying collection
-  */
-trait PolyBuildable[+A, +C[_]] extends Any with FromIterable[C] {
+  /** Partitions this $coll into a map of ${coll}s according to some discriminator function.
+    *
+    *  Note: When applied to a view or a lazy collection it will always force the elements.
+    *
+    *  @param f     the discriminator function.
+    *  @tparam K    the type of keys returned by the discriminator function.
+    *  @return      A map from keys to ${coll}s such that the following invariant holds:
+    *               {{{
+    *                 (xs groupBy f)(k) = xs filter (x => f(x) == k)
+    *               }}}
+    *               That is, every key `k` is bound to a $coll of those elements `x`
+    *               for which `f(x)` equals `k`.
+    *
+    */
+  def groupBy[K](f: A => K): immutable.Map[K, C] = {
+    val m = mutable.Map.empty[K, Builder[A, C]]
+    for (elem <- coll) {
+      val key = f(elem)
+      val bldr = m.getOrElseUpdate(key, newSpecificBuilder())
+      bldr += elem
+    }
+    var result = immutable.Map.empty[K, C]
+    m.foreach { case (k, v) =>
+      result = result + ((k, v.result()))
+    }
+    result
+  }
 
-  /** Creates a new builder. */
-  def newBuilder[E]: Builder[E, C[E]]
-}
+  /** Computes a prefix scan of the elements of the collection.
+    *
+    *  Note: The neutral element `z` may be applied more than once.
+    *
+    *  @tparam B         element type of the resulting collection
+    *  @param z          neutral element for the operator `op`
+    *  @param op         the associative operator for the scan
+    *
+    *  @return           a new $coll containing the prefix scan of the elements in this $coll
+    */
+  def scan[B >: A](z: B)(op: (B, B) => B): CC[B] = scanLeft(z)(op)
 
-/** Base trait for strict collections that can be built using a builder for element types with an implicit evidence.
-  * @tparam  A    the element type of the collection
-  * @tparam C     the type constructor of the underlying collection
-  */
-trait ConstrainedPolyBuildable[+A, +CC[_], Ev[_]] extends Any with ConstrainedFromIterable[CC, Ev] {
+  /** Produces a collection containing cumulative results of applying the
+    *  operator going left to right.
+    *
+    *  $willNotTerminateInf
+    *  $orderDependent
+    *
+    *  @tparam B      the type of the elements in the resulting collection
+    *  @param z       the initial value
+    *  @param op      the binary operator applied to the intermediate result and the element
+    *  @return        collection with intermediate results
+    */
+  def scanLeft[B](z: B)(op: (B, A) => B): CC[B] = fromIterable(View.ScanLeft(coll, z, op))
 
-  /** Creates a new builder. */
-  def newConstrainedBuilder[E : Ev]: Builder[E, CC[E]]
+  /** Produces a collection containing cumulative results of applying the operator going right to left.
+    *  The head of the collection is the last cumulative result.
+    *  $willNotTerminateInf
+    *  $orderDependent
+    *
+    *  Example:
+    *  {{{
+    *    List(1, 2, 3, 4).scanRight(0)(_ + _) == List(10, 9, 7, 4, 0)
+    *  }}}
+    *
+    *  @tparam B      the type of the elements in the resulting collection
+    *  @param z       the initial value
+    *  @param op      the binary operator applied to the intermediate result and the element
+    *  @return        collection with intermediate results
+    */
+  def scanRight[B](z: B)(op: (A, B) => B): CC[B] = {
+    var scanned = z :: immutable.Nil
+    var acc = z
+    for (x <- reversed) {
+      acc = op(x, acc)
+      scanned ::= acc
+    }
+    fromIterable(scanned)
+  }
+
+  /** Builds a new collection by applying a function to all elements of this $coll.
+    *
+    *  @param f      the function to apply to each element.
+    *  @tparam B     the element type of the returned collection.
+    *  @return       a new $coll resulting from applying the given function
+    *                `f` to each element of this $coll and collecting the results.
+    */
+  def map[B](f: A => B): CC[B] = fromIterable(View.Map(coll, f))
+
+  /** Flatmap */
+  def flatMap[B](f: A => IterableOnce[B]): CC[B] = fromIterable(View.FlatMap(coll, f))
+
+  def flatten[B](implicit ev: A => IterableOnce[B]): CC[B] =
+    fromIterable(View.FlatMap(coll, ev))
+
+  def collect[B](pf: PartialFunction[A, B]): CC[B] =
+    flatMap { a =>
+      if (pf.isDefinedAt(a)) View.Single(pf(a))
+      else View.Empty
+    }
+
+  /** Returns a new $coll containing the elements from the left hand operand followed by the elements from the
+    *  right hand operand. The element type of the $coll is the most specific superclass encompassing
+    *  the element types of the two operands.
+    *
+    *  @param suffix the traversable to append.
+    *  @tparam B     the element type of the returned collection.
+    *  @return       a new collection of type `CC[B]` which contains all elements
+    *                of this $coll followed by all elements of `suffix`.
+    */
+  def concat[B >: A](suffix: IterableOnce[B]): CC[B] = fromIterable(View.Concat(coll, suffix))
+
+  /** Alias for `concat` */
+  @`inline` final def ++ [B >: A](suffix: IterableOnce[B]): CC[B] = concat(suffix)
+
+  /** As with `++`, returns a new collection containing the elements from the left operand followed by the
+    *  elements from the right operand.
+    *
+    *  It differs from `++` in that the right operand determines the type of
+    *  the resulting collection rather than the left one.
+    *  Mnemonic: the COLon is on the side of the new COLlection type.
+    *
+    *  @param prefix   the traversable to prepend.
+    *  @tparam B     the element type of the returned collection.
+    *  @return       a new collection which contains all elements
+    *                of `prefix` followed by all the elements of this $coll.
+    *
+    *  @usecase def prependAll[B](that: TraversableOnce[B]): $Coll[B]
+    *    @inheritdoc
+    *
+    *    Example:
+    *    {{{
+    *      scala> val x = List(1)
+    *      x: List[Int] = List(1)
+    *
+    *      scala> val y = Vector(2)
+    *      y: scala.collection.immutable.Vector[Int] = Vector(2)
+    *
+    *      scala> val z = x ++: y
+    *      z: scala.collection.immutable.Vector[Int] = Vector(1, 2)
+    *    }}}
+    *
+    *    @return       a new $coll which contains all elements of `prefix` followed
+    *                  by all the elements of this $coll.
+    */
+  def prependAll[B >: A](prefix: Iterable[B]): CC[B] = fromIterable(View.Concat(prefix, coll))
+
+  /** Alias for `prependAll` */
+  @`inline` final def ++: [B >: A](prefix: Iterable[B]): CC[B] = prependAll(prefix)
+
+  /** Returns a $coll formed from this $coll and another iterable collection
+    *  by combining corresponding elements in pairs.
+    *  If one of the two collections is longer than the other, its remaining elements are ignored.
+    *
+    *  @param   xs  The iterable providing the second half of each result pair
+    *  @tparam  B     the type of the second half of the returned pairs
+    *  @return        a new collection of type `That` containing pairs consisting of
+    *                 corresponding elements of this $coll and `that`. The length
+    *                 of the returned collection is the minimum of the lengths of this $coll and `that`.
+    */
+  def zip[B](xs: IterableOnce[B]): CC[(A @uncheckedVariance, B)] = fromIterable(View.Zip(coll, xs))
+  // sound bcs of VarianceNote
+
+  /** Zips this $coll with its indices.
+    *
+    *  @return        A new collection of type `That` containing pairs consisting of all elements of this
+    *                 $coll paired with their index. Indices start at `0`.
+    *  @example
+    *    `List("a", "b", "c").zipWithIndex == List(("a", 0), ("b", 1), ("c", 2))`
+    */
+  def zipWithIndex: CC[(A @uncheckedVariance, Int)] = fromIterable(View.ZipWithIndex(coll))
+
+  /** Converts this $coll of pairs into two collections of the first and second
+    *  half of each pair.
+    *
+    *    {{{
+    *    val xs = $Coll(
+    *               (1, "one"),
+    *               (2, "two"),
+    *               (3, "three")).unzip
+    *    // xs == ($Coll(1, 2, 3),
+    *    //        $Coll(one, two, three))
+    *    }}}
+    *
+    *  @tparam A1    the type of the first half of the element pairs
+    *  @tparam A2    the type of the second half of the element pairs
+    *  @param asPair an implicit conversion which asserts that the element type
+    *                of this $coll is a pair.
+    *  @return       a pair of ${coll}s, containing the first, respectively second
+    *                half of each element pair of this $coll.
+    */
+  def unzip[A1, A2](implicit asPair: A <:< (A1, A2)): (CC[A1], CC[A2]) = {
+    val unzipped = View.Unzip(coll)
+    (fromIterable(unzipped.first), fromIterable(unzipped.second))
+  }
+
 }
