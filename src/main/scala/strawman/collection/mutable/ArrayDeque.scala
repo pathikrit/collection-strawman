@@ -139,36 +139,37 @@ class ArrayDeque[A] private[ArrayDeque](
     }
   }
 
-  override def remove(idx: Int, count: Int): Unit = {
-    if (count < 0) throw new IllegalArgumentException(s"removing negative number of elements: $count")
-    ArrayDeque.checkIndex(idx, this)
-    if (count == 0) return
-    val removals = (size - idx) min count
-    // If we are removing more than half the elements, its cheaper to start over
-    // Else, choose the shorter: either move the prefix (0 until (idx + removals) right OR the suffix (idx to size) left
-    if (2*removals >= size) {
-      val array2 = ArrayDeque.alloc(size - removals)
-      copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
-      copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = size)
-      resetInternal(array = array2, start = 0, end = size - removals)
-    } else if (size - idx <= idx + removals) {
-      var i = idx
-      while(i + removals < size) {
-        setInternal(i, getInternal(i + removals))
-        setInternal(i + removals, null)
-        i += 1
+  override def remove(idx: Int, count: Int) = {
+    require(count >= 0, s"removing negative number of elements: $count")
+    if (count > 0) {
+      ArrayDeque.checkIndex(idx, this)
+      val removals = (size - idx) min count
+      // If we are removing more than half the elements, its cheaper to start over
+      // Else, choose the shorter: either move the prefix (0 until (idx + removals) right OR the suffix (idx to size) left
+      if (2*removals >= size) {
+        val array2 = ArrayDeque.alloc(size - removals)
+        copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
+        copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = size)
+        resetInternal(array = array2, start = 0, end = size - removals)
+      } else if (size - idx <= idx + removals) {
+        var i = idx
+        while(i + removals < size) {
+          setInternal(i, getInternal(i + removals))
+          setInternal(i + removals, null)
+          i += 1
+        }
+        nullify(from = i)
+        end = end_-(removals)
+      } else {
+        var i = idx + removals - 1
+        while(i - removals >= 0) {
+          setInternal(i, getInternal(i - removals))
+          setInternal(i - removals, null)
+          i -= 1
+        }
+        nullify(until = i + 1)
+        start = start_+(removals)
       }
-      nullify(from = i)
-      end = end_-(removals)
-    } else {
-      var i = idx + removals - 1
-      while(i - removals >= 0) {
-        setInternal(i, getInternal(i - removals))
-        setInternal(i - removals, null)
-        i -= 1
-      }
-      nullify(until = i + 1)
-      start = start_+(removals)
     }
   }
 
