@@ -61,7 +61,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def apply(idx: Int) = {
     ArrayDeque.checkIndex(idx, this)
-    _get(idx).asInstanceOf[A]
+    _get(idx)
   }
 
   override def update(idx: Int, elem: A) = {
@@ -94,18 +94,24 @@ class ArrayDeque[A] private[ArrayDeque](
   override def ++=:(elems: TraversableOnce[A]) = {
     if (elems.nonEmpty) {
       ArrayDeque.knownSize(elems) match {
+        // Size is too expensive to compute - we need to make one more pass to make it an IndexedSeq and retry
+        case srcLength if srcLength < 0 =>
+          elems.toIndexedSeq ++=: this
+
         // We know we need to resize in the end, might as well resize and memcopy upfront
-        case srcLength if srcLength >= 0 && 2*(srcLength + this.length) >= mask =>
+        case srcLength if srcLength + this.length >= mask =>
           val finalLength = srcLength + this.length
           val array2 = ArrayDeque.alloc(finalLength)
           elems.copyToArray(array2.asInstanceOf[Array[A]])
           copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = size)
           reset(array = array2, start = 0, end = finalLength)
 
-        case _ =>
-          val copy = clone()
-          end = start
-          this ++= elems ++= copy
+        // We know resizing is not necessary so just fill up from (start - srcLength) to (start - 1) and move back start
+        case srcLength =>
+          elems.toIterator.zipWithIndex foreach {
+            case (elem, i) => _set(i - srcLength, elem)
+          }
+          start = start_+(-srcLength)
       }
     }
     this
@@ -117,23 +123,25 @@ class ArrayDeque[A] private[ArrayDeque](
       ArrayDeque.knownSize(elems) match {
         case srcLength if srcLength >= 0 =>
           val finalLength = srcLength + this.length
-          // Either we resize right away or move prefix right or suffix left
-          if (2*finalLength >= mask) {
+          // Either we resize right away or move prefix left or suffix right
+          if (finalLength >= mask) {
             val array2 = ArrayDeque.alloc(finalLength)
             copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
             elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
             copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
             reset(array = array2, start = 0, end = finalLength)
-          } else {
+          } else if (idx >= length/2) { // Cheaper to shift the suffix right
             val suffix = drop(idx)
             end = start_+(idx)
             elems.foreach(appendAssumingCapacity)
             suffix.foreach(appendAssumingCapacity)
+          } else {  // Cheaper to shift prefix left
+            val prefix = take(idx)
+            start = start_+(idx)
+            prefix ++=: elems ++=: this
           }
-        case _ => //expensive to compute size
-          val suffix = drop(idx)
-          end = start_+(idx)
-          this ++= elems ++= suffix
+        case _ => //Expensive to compute size, retry using IndexedSeq
+          insertAll(idx, elems.toIndexedSeq)
       }
     }
   }
@@ -363,7 +371,8 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
   final val DefaultInitialSize = 8
 
   private[ArrayDeque] def knownSize[A](coll: TraversableOnce[A]) = {
-    /*coll.sizeHintIfCheap*/ -1 //TODO: Remove this temporary util when we switch to strawman .sizeHintIfCheap is now .knownSize
+    //TODO: Remove this temporary util when we switch to strawman .sizeHintIfCheap is now .knownSize
+    if (coll.isInstanceOf[List[_]] || coll.isInstanceOf[Stream[_]] || coll.isInstanceOf[Iterator[_]]) -1 else coll.size
   }
 
   /**

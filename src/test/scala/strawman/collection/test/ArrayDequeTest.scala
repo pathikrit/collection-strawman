@@ -28,12 +28,15 @@ class ArrayDequeTest {
     apply(_.trimEnd(3))
     apply(_.insertAll(0, Seq(9, 10, 11)))
     apply(_.insertAll(1, Seq(12, 13)))
+    apply(_.insertAll(1, IndexedSeq(18, 2113)))
     apply(_.remove(2))
     apply(_.prependAll(Seq(14, 15, 16, 17)))
     apply(_.remove(1, 5))
     apply(_.prependAll(Seq.tabulate(100)(identity)))
     buffer.trimToSize()
     apply(_.appendAll(Seq.tabulate(100)(identity)))
+    apply(_.appendAll(Iterator.tabulate(100)(identity)))
+    apply(_.prependAll(Vector.tabulate(10)(identity)))
 
     (-100 to 100) foreach {i =>
       assert(buffer.splitAt(i) == buffer2.splitAt(i))
