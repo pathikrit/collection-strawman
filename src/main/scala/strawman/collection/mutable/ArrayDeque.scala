@@ -6,8 +6,6 @@ import scala.collection.{GenSeq, generic, mutable}
 import scala.reflect.ClassTag
 import scala.Predef._
 
-import java.lang.Integer
-
 /** An implementation of a double-ended queue that internally uses a resizable circular buffer
   *  Append, prepend, removeFirst, removeLast and random-access (indexed-lookup and indexed-replacement)
   *  take amortized constant time. In general, removals and insertions at i-th index are O(min(i, n-i))
@@ -213,6 +211,16 @@ class ArrayDeque[A] private[ArrayDeque](
     }
   }
 
+  /**
+    * Remove all elements from this collection and return the elements while emptying this data structure
+    * @return
+    */
+  def removeAll(): scala.collection.Seq[A] = {
+    val elems = toSeq
+    clear()
+    elems
+  }
+
   override def reverse = foldLeft(new ArrayDeque[A](initialSize = size))(_.prependAssumingCapacity(_))
 
   override def sizeHint(hint: Int) = if (hint >= mask) resize(hint + 1)
@@ -366,7 +374,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     new Array[AnyRef](nextPowerOfTwo(len).ensuring(_ >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len"))
 
   private[ArrayDeque] def nextPowerOfTwo(i: Int): Int =
-    ((1 << 31) >>> Integer.numberOfLeadingZeros(i)) << 1
+    ((1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(i)) << 1
 
   @inline private[ArrayDeque] def checkIndex(idx: Int, seq: GenSeq[_]) =
     if (!seq.isDefinedAt(idx)) throw new IndexOutOfBoundsException(idx.toString)
