@@ -46,9 +46,9 @@ class ArrayDeque[A] private[ArrayDeque](
     with Serializable {
 
   private[this] var mask = 0   // modulus using bitmask since array.length is always power of 2
-  resetInternal(array, start, end)
+  reset(array, start, end)
 
-  private[this] def resetInternal(array: Array[AnyRef], start: Int, end: Int) = {
+  private[this] def reset(array: Array[AnyRef], start: Int, end: Int) = {
     this.array = array
     this.mask = array.length - 1
     assert((array.length & mask) == 0, s"Array.length must be power of 2")
@@ -61,12 +61,12 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def apply(idx: Int) = {
     ArrayDeque.checkIndex(idx, this)
-    getInternal(idx).asInstanceOf[A]
+    _get(idx).asInstanceOf[A]
   }
 
   override def update(idx: Int, elem: A) = {
     ArrayDeque.checkIndex(idx, this)
-    setInternal(idx, elem.asInstanceOf[AnyRef])
+    _set(idx, elem)
   }
 
   override def +=(elem: A) = {
@@ -92,15 +92,16 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def ++=:(elems: TraversableOnce[A]) = {
-    // Note this is faster than super.++=: because this does not need to convert TraversableOnce to a Traversable
     if (elems.nonEmpty) {
       ArrayDeque.knownSize(elems) match {
+        // We know we need to resize in the end, might as well resize and memcopy upfront
         case srcLength if srcLength >= 0 && 2*(srcLength + this.length) >= mask =>
           val finalLength = srcLength + this.length
           val array2 = ArrayDeque.alloc(finalLength)
           elems.copyToArray(array2.asInstanceOf[Array[A]])
           copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = size)
-          resetInternal(array = array2, start = 0, end = finalLength)
+          reset(array = array2, start = 0, end = finalLength)
+
         case _ =>
           val copy = clone()
           end = start
@@ -122,7 +123,7 @@ class ArrayDeque[A] private[ArrayDeque](
             copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
             elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
             copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
-            resetInternal(array = array2, start = 0, end = finalLength)
+            reset(array = array2, start = 0, end = finalLength)
           } else {
             val suffix = drop(idx)
             end = start_+(idx)
@@ -148,12 +149,12 @@ class ArrayDeque[A] private[ArrayDeque](
         val array2 = ArrayDeque.alloc(size - removals)
         copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
         copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = size)
-        resetInternal(array = array2, start = 0, end = size - removals)
+        reset(array = array2, start = 0, end = size - removals)
       } else if (size - idx <= idx + removals) {
         var i = idx
         while(i + removals < size) {
-          setInternal(i, getInternal(i + removals))
-          setInternal(i + removals, null)
+          _set(i, _get(i + removals))
+          _clear(i + removals)
           i += 1
         }
         nullify(from = i)
@@ -161,8 +162,8 @@ class ArrayDeque[A] private[ArrayDeque](
       } else {
         var i = idx + removals - 1
         while(i - removals >= 0) {
-          setInternal(i, getInternal(i - removals))
-          setInternal(i - removals, null)
+          _set(i, _get(i - removals))
+          _clear(i - removals)
           i -= 1
         }
         nullify(until = i + 1)
@@ -253,7 +254,7 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def clearAndShrink(size: Int = ArrayDeque.DefaultInitialSize): this.type = {
     require(size >= 0, s"Non-negative size required")
-    resetInternal(array = ArrayDeque.alloc(size), start = 0, end = 0)
+    reset(array = ArrayDeque.alloc(size), start = 0, end = 0)
     this
   }
 
@@ -331,14 +332,16 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   @inline private[this] def end_-(idx: Int) = (end - idx) & mask
 
-  @inline private[this] def getInternal(idx: Int) = array(start_+(idx))
+  @inline private[this] def _get(idx: Int): A = array(start_+(idx)).asInstanceOf[A]
 
-  @inline private[this] def setInternal(idx: Int, elem: AnyRef) = array(start_+(idx)) = elem
+  @inline private[this] def _set(idx: Int, elem: A) = array(start_+(idx)) = elem.asInstanceOf[AnyRef]
+
+  @inline private[this] def _clear(idx: Int) = _set(idx, null.asInstanceOf[A])
 
   private[this] def nullify(from: Int = 0, until: Int = size) = {
     var i = from
     while(i < until) {
-      setInternal(i, null)
+      _clear(i)
       i += 1
     }
   }
@@ -346,7 +349,7 @@ class ArrayDeque[A] private[ArrayDeque](
   private[this] def resize(len: Int) = {
     if (ArrayDeque.nextPowerOfTwo(len) != array.length) {
       val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
-      resetInternal(array = array2, start = 0, end = size)
+      reset(array = array2, start = 0, end = size)
     }
   }
 }
