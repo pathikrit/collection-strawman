@@ -94,23 +94,29 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def ++=:(elems: TraversableOnce[A]) = {
     if (elems.nonEmpty) {
+      // The following code resizes the current collection atmost once and traverses elems atmost twice
       ArrayDeque.knownSize(elems) match {
-        // Size is too expensive to compute - we need to make one more pass to make it an IndexedSeq and retry
-        case srcLength if srcLength < 0 =>
-          elems.toIndexedSeq ++=: this
+        // Size is too expensive to compute AND we can traverse it only once - can't do much but retry with an IndexedSeq
+        case srcLength if srcLength < 0 && !elems.isTraversableAgain => elems.toIndexedSeq ++=: this
 
-        // We know we need to resize in the end, might as well resize and memcopy upfront
-        case srcLength if isExpansionNeeded(srcLength + this.length) =>
+        // We know for sure we need to resize to hold everything, might as well resize and memcopy upfront
+        case srcLength if srcLength > 0 && isExpansionNeeded(srcLength + this.length) =>
           val finalLength = srcLength + this.length
           val array2 = ArrayDeque.alloc(finalLength)
           elems.copyToArray(array2.asInstanceOf[Array[A]])
           copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = size)
           reset(array = array2, start = 0, end = finalLength)
 
-        // We know resizing is not necessary so just fill up from (start - srcLength) to (start - 1) and move back start
-        case srcLength =>
-          elems.toIterator.zipWithIndex foreach {
-            case (elem, i) => _set(i - srcLength, elem)
+        // /Just fill up from (start - srcLength) to (start - 1) and move back start
+        case _srcLength =>
+          val srcLength = if (_srcLength < 0) elems.size else _srcLength
+          sizeHint(srcLength + this.length)
+          // Optimized version of `elems.zipWithIndex.foreach((elem, i) => _set(i - srcLength, elem))`
+          var i = 0
+          val it = elems.toIterator
+          while(it.hasNext) {
+            _set(i - srcLength, it.next())
+            i += 1
           }
           start = start_+(-srcLength)
       }
