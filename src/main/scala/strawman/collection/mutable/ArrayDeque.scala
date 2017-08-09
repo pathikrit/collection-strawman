@@ -48,14 +48,12 @@ class ArrayDeque[A] private[ArrayDeque](
     with mutable.Builder[A, ArrayDeque[A]]
     with Serializable {
 
-  private[this] var mask = 0   // modulus using bitmask since array.length is always power of 2
   reset(array, start, end)
 
   private[this] def reset(array: Array[AnyRef], start: Int, end: Int) = {
+    assert((array.length & (array.length - 1)) == 0, s"Array.length must be power of 2")
+    assert(array.isDefinedAt(start) && array.isDefinedAt(end))
     this.array = array
-    this.mask = array.length - 1
-    assert((array.length & mask) == 0, s"Array.length must be power of 2")
-    assert(0 <= start && start <= mask && 0 <= end && end <= mask)
     this.start = start
     this.end = end
   }
@@ -102,7 +100,7 @@ class ArrayDeque[A] private[ArrayDeque](
           elems.toIndexedSeq ++=: this
 
         // We know we need to resize in the end, might as well resize and memcopy upfront
-        case srcLength if srcLength + this.length >= mask =>
+        case srcLength if isExpansionNeeded(srcLength + this.length) =>
           val finalLength = srcLength + this.length
           val array2 = ArrayDeque.alloc(finalLength)
           elems.copyToArray(array2.asInstanceOf[Array[A]])
@@ -127,7 +125,7 @@ class ArrayDeque[A] private[ArrayDeque](
         case srcLength if srcLength >= 0 =>
           val finalLength = srcLength + this.length
           // Either we resize right away or move prefix left or suffix right
-          if (finalLength >= mask) {
+          if (isExpansionNeeded(finalLength)) {
             val array2 = ArrayDeque.alloc(finalLength)
             copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
             elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
@@ -210,7 +208,7 @@ class ArrayDeque[A] private[ArrayDeque](
     val elem = array(start)
     array(start) = null
     start = start_+(1)
-    if (resizeInternalRepr && 2*size < mask) resize(size)
+    if (resizeInternalRepr) resize(size)
     elem.asInstanceOf[A]
   }
 
@@ -235,7 +233,7 @@ class ArrayDeque[A] private[ArrayDeque](
     end = end_-(1)
     val elem = array(end)
     array(end) = null
-    if (resizeInternalRepr && 2*size < mask) resize(size)
+    if (resizeInternalRepr) resize(size)
     elem.asInstanceOf[A]
   }
 
@@ -287,7 +285,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def reverse = foldLeft(new ArrayDeque[A](initialSize = size))(_.prependAssumingCapacity(_))
 
-  override def sizeHint(hint: Int) = if (hint >= mask) resize(hint + 1)
+  override def sizeHint(hint: Int) = if (isExpansionNeeded(hint)) resize(hint + 1)
 
   override def length = end_-(start)
 
@@ -386,12 +384,12 @@ class ArrayDeque[A] private[ArrayDeque](
   /**
     * Add idx to start modulo mask
     */
-  @inline private[this] def start_+(idx: Int) = (start + idx) & mask
+  @inline private[this] def start_+(idx: Int) = (start + idx) & (array.length - 1)
 
   /**
     * Subtract idx from end modulo mask
     */
-  @inline private[this] def end_-(idx: Int) = (end - idx) & mask
+  @inline private[this] def end_-(idx: Int) = (end - idx) & (array.length - 1)
 
   @inline private[this] def _get(idx: Int): A = array(start_+(idx)).asInstanceOf[A]
 
@@ -399,7 +397,10 @@ class ArrayDeque[A] private[ArrayDeque](
 
   @inline private[this] def setNull(idx: Int) = _set(idx, null.asInstanceOf[A])
 
+  @inline private[this] def isExpansionNeeded(len: Int) = len >= (array.length - 1)
+
   private[this] def nullify(from: Int = 0, until: Int = size) = {
+    // Optimized version of `from.until(until).foreach(setNull)`
     var i = from
     while(i < until) {
       setNull(i)
@@ -425,7 +426,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
 
   private[ArrayDeque] def knownSize[A](coll: TraversableOnce[A]) = {
     //TODO: Remove this temporary util when we switch to strawman .sizeHintIfCheap is now .knownSize
-    if (coll.isInstanceOf[List[_]] || coll.isInstanceOf[Stream[_]] || coll.isInstanceOf[Iterator[_]]) -1 else coll.size
+    if (coll.isInstanceOf[List[_]] || coll.isInstanceOf[Stream[_]] || coll.isInstanceOf[Iterator[_]] || !coll.isTraversableAgain) -1 else coll.size
   }
 
   /**
