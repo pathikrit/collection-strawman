@@ -4,7 +4,9 @@ package collection.mutable
 import scala._
 import scala.collection.{GenSeq, generic, mutable}
 import scala.reflect.ClassTag
-import scala.Predef._
+import scala.Predef.{assert, require, genericWrapArray}
+
+import java.lang.Math
 
 /** An implementation of a double-ended queue that internally uses a resizable circular buffer
   *  Append, prepend, removeFirst, removeLast and random-access (indexed-lookup and indexed-replacement)
@@ -130,7 +132,7 @@ class ArrayDeque[A] private[ArrayDeque](
             elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
             copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
             reset(array = array2, start = 0, end = finalLength)
-          } else if (idx >= length/2) { // Cheaper to shift the suffix right
+          } else if (2*idx >= length) { // Cheaper to shift the suffix right
             val suffix = drop(idx)
             end = start_+(idx)
             elems.foreach(appendAssumingCapacity)
@@ -150,7 +152,7 @@ class ArrayDeque[A] private[ArrayDeque](
     require(count >= 0, s"removing negative number of elements: $count")
     if (count > 0) {
       ArrayDeque.checkIndex(idx, this)
-      val removals = (size - idx) min count
+      val removals = Math.min(size - idx, count)
       // If we are removing more than half the elements, its cheaper to start over
       // Else, choose the shorter: either move the prefix (0 until (idx + removals) right OR the suffix (idx to size) left
       if (2*removals >= size) {
@@ -162,7 +164,7 @@ class ArrayDeque[A] private[ArrayDeque](
         var i = idx
         while(i + removals < size) {
           _set(i, _get(i + removals))
-          _clear(i + removals)
+          setNull(i + removals)
           i += 1
         }
         nullify(from = i)
@@ -171,7 +173,7 @@ class ArrayDeque[A] private[ArrayDeque](
         var i = idx + removals - 1
         while(i - removals >= 0) {
           _set(i, _get(i - removals))
-          _clear(i - removals)
+          setNull(i - removals)
           i -= 1
         }
         nullify(until = i + 1)
@@ -282,7 +284,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def sliding(window: Int, step: Int) = {
     require(window > 0 && step > 0, s"window=$window and step=$step, but both must be positive")
-    val lag = (window - step) max 0
+    val lag = if (window > step) window - step else 0
     Iterator.range(start = 0, end = length - lag, step = step).map(i => slice(i, i + window))
   }
 
@@ -313,10 +315,10 @@ class ArrayDeque[A] private[ArrayDeque](
   def copySliceToArray(srcStart: Int, dest: Array[_], destStart: Int, maxItems: Int): dest.type = {
     ArrayDeque.checkIndex(srcStart, this)
     ArrayDeque.checkIndex(destStart, dest)
-    val toCopy = maxItems min (size - srcStart) min (dest.length - destStart)
+    val toCopy = Math.min(maxItems, Math.min(size - srcStart, dest.length - destStart))
     if (toCopy > 0) {
       val startIdx = start_+(srcStart)
-      val block1 = toCopy min (array.length - startIdx)
+      val block1 = Math.min(toCopy, array.length - startIdx)
       Array.copy(src = array, srcPos = startIdx, dest = dest, destPos = destStart, length = block1)
       if (block1 < toCopy) {
         Array.copy(src = array, srcPos = 0, dest = dest, destPos = block1, length = toCopy - block1)
@@ -344,12 +346,12 @@ class ArrayDeque[A] private[ArrayDeque](
 
   @inline private[this] def _set(idx: Int, elem: A) = array(start_+(idx)) = elem.asInstanceOf[AnyRef]
 
-  @inline private[this] def _clear(idx: Int) = _set(idx, null.asInstanceOf[A])
+  @inline private[this] def setNull(idx: Int) = _set(idx, null.asInstanceOf[A])
 
   private[this] def nullify(from: Int = 0, until: Int = size) = {
     var i = from
     while(i < until) {
-      _clear(i)
+      setNull(i)
       i += 1
     }
   }
@@ -382,8 +384,11 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     * @param len
     * @return
     */
-  private[ArrayDeque] def alloc(len: Int) =
-    new Array[AnyRef](nextPowerOfTwo(len).ensuring(_ >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len"))
+  private[ArrayDeque] def alloc(len: Int) = {
+    val size = nextPowerOfTwo(len)
+    require(size >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len")
+    new Array[AnyRef](size)
+  }
 
   private[ArrayDeque] def nextPowerOfTwo(i: Int): Int =
     ((1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(i)) << 1
