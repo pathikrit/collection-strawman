@@ -217,7 +217,7 @@ class ArrayDeque[A] private[ArrayDeque](
     * @return
     */
   def removeHeadOption(resizeInternalRepr: Boolean = false): Option[A] =
-    if (isEmpty) None else Some(removeHead(resizeInternalRepr))
+    if (isEmpty) None else Some(removeHeadAssumingNonEmpty(resizeInternalRepr))
 
   /**
     * Unsafely remove the first element (throws exception when empty)
@@ -227,8 +227,10 @@ class ArrayDeque[A] private[ArrayDeque](
     * @throws NoSuchElementException when empty
     * @return
     */
-  def removeHead(resizeInternalRepr: Boolean = false): A = {
-    if (isEmpty) throw new NoSuchElementException(s"empty collection")
+  def removeHead(resizeInternalRepr: Boolean = false): A =
+    if (isEmpty) throw new NoSuchElementException(s"empty collection") else removeHeadAssumingNonEmpty(resizeInternalRepr)
+
+  private[this] def removeHeadAssumingNonEmpty(resizeInternalRepr: Boolean = false): A = {
     val elem = array(start)
     array(start) = null
     start = start_+(1)
@@ -242,7 +244,7 @@ class ArrayDeque[A] private[ArrayDeque](
     * @return
     */
   def removeLastOption(resizeInternalRepr: Boolean = false): Option[A] =
-    if (isEmpty) None else Some(removeLast(resizeInternalRepr))
+    if (isEmpty) None else Some(removeLastAssumingNonEmpty(resizeInternalRepr))
 
   /**
     * Unsafely remove the last element (throws exception when empty)
@@ -252,8 +254,10 @@ class ArrayDeque[A] private[ArrayDeque](
     * @throws NoSuchElementException when empty
     * @return
     */
-  def removeLast(resizeInternalRepr: Boolean = false): A = {
-    if (isEmpty) throw new NoSuchElementException(s"empty collection")
+  def removeLast(resizeInternalRepr: Boolean = false): A =
+    if (isEmpty) throw new NoSuchElementException(s"empty collection") else removeLastAssumingNonEmpty(resizeInternalRepr)
+
+  private[this] def removeLastAssumingNonEmpty(resizeInternalRepr: Boolean = false): A = {
     end = end_-(1)
     val elem = array(end)
     array(end) = null
@@ -336,9 +340,9 @@ class ArrayDeque[A] private[ArrayDeque](
     * See clearAndShrink if you want to also resize internally
     */
   override def clear() = {
-    nullify()
-    start = 0
-    end = 0
+    while(nonEmpty) {
+      removeHeadAssumingNonEmpty()
+    }
   }
 
   /**
