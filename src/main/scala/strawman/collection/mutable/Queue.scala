@@ -42,7 +42,7 @@ class Queue[A] extends ArrayDeque[A] {
     * @return
     * @throws java.util.NoSuchElementException when queue is empty
     */
-  def dequeue(): A = unsafeRemoveFirst()
+  def dequeue(): A = removeHead()
 
   /**
     * Dequeues all elements from this stack and return it

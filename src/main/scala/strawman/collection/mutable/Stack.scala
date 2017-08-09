@@ -43,7 +43,7 @@ class Stack[A] extends ArrayDeque[A] {
     * @return
     * @throws java.util.NoSuchElementException when stack is empty
     */
-  def pop(): A = unsafeRemoveFirst()
+  def pop(): A = removeHead()
 
   /**
     * Pop all elements from this stack and return it

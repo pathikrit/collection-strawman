@@ -125,7 +125,7 @@ class ArrayDeque[A] private[ArrayDeque](
     this
   }
 
-  override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
+  override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
     requireBounds(idx)
     if (elems.nonEmpty) {
       ArrayDeque.knownSize(elems) match {
@@ -199,18 +199,18 @@ class ArrayDeque[A] private[ArrayDeque](
     * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
     * @return
     */
-  def removeFirst(resizeInternalRepr: Boolean = false): Option[A] =
-    if (isEmpty) None else Some(unsafeRemoveFirst(resizeInternalRepr))
+  def removeHeadOption(resizeInternalRepr: Boolean = false): Option[A] =
+    if (isEmpty) None else Some(removeHead(resizeInternalRepr))
 
   /**
     * Unsafely remove the first element (throws exception when empty)
-    * See also removeFirst()
+    * See also removeHeadOption()
     *
     * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
     * @throws NoSuchElementException when empty
     * @return
     */
-  def unsafeRemoveFirst(resizeInternalRepr: Boolean = false): A = {
+  def removeHead(resizeInternalRepr: Boolean = false): A = {
     if (isEmpty) throw new NoSuchElementException(s"empty collection")
     val elem = array(start)
     array(start) = null
@@ -224,8 +224,8 @@ class ArrayDeque[A] private[ArrayDeque](
     * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
     * @return
     */
-  def removeLast(resizeInternalRepr: Boolean = false): Option[A] =
-    if (isEmpty) None else Some(unsafeRemoveLast(resizeInternalRepr))
+  def removeLastOption(resizeInternalRepr: Boolean = false): Option[A] =
+    if (isEmpty) None else Some(removeLast(resizeInternalRepr))
 
   /**
     * Unsafely remove the last element (throws exception when empty)
@@ -235,7 +235,7 @@ class ArrayDeque[A] private[ArrayDeque](
     * @throws NoSuchElementException when empty
     * @return
     */
-  def unsafeRemoveLast(resizeInternalRepr: Boolean = false): A = {
+  def removeLast(resizeInternalRepr: Boolean = false): A = {
     if (isEmpty) throw new NoSuchElementException(s"empty collection")
     end = end_-(1)
     val elem = array(end)
@@ -263,7 +263,7 @@ class ArrayDeque[A] private[ArrayDeque](
   def removeHeadWhile(f: A => Boolean): scala.collection.Seq[A] = {
     val elems = Seq.newBuilder[A]
     while(headOption.exists(f)) {
-      elems += unsafeRemoveFirst()
+      elems += removeHead()
     }
     elems.result()
   }
@@ -277,7 +277,7 @@ class ArrayDeque[A] private[ArrayDeque](
   def removeLastWhile(f: A => Boolean): scala.collection.Seq[A] = {
     val elems = Seq.newBuilder[A]
     while(lastOption.exists(f)) {
-      elems += unsafeRemoveLast()
+      elems += removeLast()
     }
     elems.result()
   }
@@ -449,7 +449,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
   private[ArrayDeque] def alloc(len: Int) = {
     val size = nextPowerOfTwo(len)
     require(size >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len")
-    new Array[AnyRef](size)
+    new Array[AnyRef](Math.max(size, DefaultInitialSize))
   }
 
   private[ArrayDeque] def nextPowerOfTwo(i: Int): Int =
