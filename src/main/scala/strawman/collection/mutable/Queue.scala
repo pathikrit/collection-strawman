@@ -18,8 +18,7 @@ class Queue[A] extends ArrayDeque[A] {
     * @param elem
     * @return this
     */
-  def enqueue(elem: A): this.type =
-    this += elem
+  def enqueue(elem: A): this.type = this += elem
 
   /** Enqueue two or more elements at the end of the queue. The last element
     *  of the sequence will be on end of the queue.
@@ -27,8 +26,7 @@ class Queue[A] extends ArrayDeque[A] {
     *  @param   elems      the element sequence.
     *  @return this
     */
-  def enqueue(elem1: A, elem2: A, elems: A*): this.type =
-    enqueue(elem1).enqueue(elem2).enqueueAll(elems)
+  def enqueue(elem1: A, elem2: A, elems: A*): this.type = enqueue(elem1).enqueue(elem2).enqueueAll(elems)
 
   /** Enqueues all elements in the given traversable object into the queue. The
     *  last element in the traversable object will be on front of the new queue.
@@ -36,8 +34,7 @@ class Queue[A] extends ArrayDeque[A] {
     *  @param elems the traversable object.
     *  @return this
     */
-  def enqueueAll(elems: TraversableOnce[A]): this.type =
-    this ++= elems
+  def enqueueAll(elems: TraversableOnce[A]): this.type = this ++= elems
 
   /**
     * Removes the from element from this queue and return it
@@ -45,16 +42,14 @@ class Queue[A] extends ArrayDeque[A] {
     * @return
     * @throws java.util.NoSuchElementException when queue is empty
     */
-  def dequeue(): A =
-    removeFirst().getOrElse(throw new java.util.NoSuchElementException("empty queue"))
+  def dequeue(): A = unsafeRemoveFirst()
 
   /**
     * Dequeues all elements from this stack and return it
     *
     * @return
     */
-  def dequeueAll(): scala.collection.Seq[A] =
-    removeAll()
+  def dequeueAll(): scala.collection.Seq[A] = removeAll()
 
   /**
     * Returns and removes all elements from the end of this queue which satisfy the given predicate
@@ -62,19 +57,5 @@ class Queue[A] extends ArrayDeque[A] {
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def dequeueWhile(f: A => Boolean): scala.collection.Seq[A] = {
-    val elems = Seq.newBuilder[A]
-    while(peek.exists(f)) {
-      elems += dequeue()
-    }
-    elems.result()
-  }
-
-  /**
-    * Returns the next element of this queue (without removing it) and returns it (None if empty)
-    *
-    * @return
-    */
-  def peek: Option[A] =
-    headOption
+  def dequeueWhile(f: A => Boolean): scala.collection.Seq[A] = removeHeadWhile(f)
 }

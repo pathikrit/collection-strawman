@@ -7,6 +7,7 @@ import scala.reflect.ClassTag
 import scala.Predef.{assert, require, genericWrapArray}
 
 import java.lang.Math
+import java.util.NoSuchElementException
 
 /** An implementation of a double-ended queue that internally uses a resizable circular buffer
   *  Append, prepend, removeFirst, removeLast and random-access (indexed-lookup and indexed-replacement)
@@ -193,16 +194,24 @@ class ArrayDeque[A] private[ArrayDeque](
     * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
     * @return
     */
-  def removeFirst(resizeInternalRepr: Boolean = false): Option[A] = {
-    if (isEmpty) {
-      None
-    } else {
-      val elem = array(start)
-      array(start) = null
-      start = start_+(1)
-      if (resizeInternalRepr && 2*size < mask) resize(size)
-      Some(elem.asInstanceOf[A])
-    }
+  def removeFirst(resizeInternalRepr: Boolean = false): Option[A] =
+    if (isEmpty) None else Some(unsafeRemoveFirst(resizeInternalRepr))
+
+  /**
+    * Unsafely remove the last element (throws exception when empty)
+    * See also removelast()
+    *
+    * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
+    * @throws NoSuchElementException when empty
+    * @return
+    */
+  def unsafeRemoveFirst(resizeInternalRepr: Boolean = false): A = {
+    if (isEmpty) throw new NoSuchElementException(s"empty collection")
+    val elem = array(start)
+    array(start) = null
+    start = start_+(1)
+    if (resizeInternalRepr && 2*size < mask) resize(size)
+    elem.asInstanceOf[A]
   }
 
   /**
@@ -210,16 +219,24 @@ class ArrayDeque[A] private[ArrayDeque](
     * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
     * @return
     */
-  def removeLast(resizeInternalRepr: Boolean = false): Option[A] = {
-    if (isEmpty) {
-      None
-    } else {
-      end = end_-(1)
-      val elem = array(end)
-      array(end) = null
-      if (resizeInternalRepr && 2*size < mask) resize(size)
-      Some(elem.asInstanceOf[A])
-    }
+  def removeLast(resizeInternalRepr: Boolean = false): Option[A] =
+    if (isEmpty) None else Some(unsafeRemoveLast(resizeInternalRepr))
+
+  /**
+    * Unsafely remove the last element (throws exception when empty)
+    * See also removelast()
+    *
+    * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
+    * @throws NoSuchElementException when empty
+    * @return
+    */
+  def unsafeRemoveLast(resizeInternalRepr: Boolean = false): A = {
+    if (isEmpty) throw new NoSuchElementException(s"empty collection")
+    end = end_-(1)
+    val elem = array(end)
+    array(end) = null
+    if (resizeInternalRepr && 2*size < mask) resize(size)
+    elem.asInstanceOf[A]
   }
 
   /**
@@ -231,6 +248,42 @@ class ArrayDeque[A] private[ArrayDeque](
     clear()
     elems
   }
+
+  /**
+    * Returns and removes all elements from the left of this queue which satisfy the given predicate
+    *
+    *  @param f   the predicate used for choosing elements
+    *  @return
+    */
+  def removeHeadWhile(f: A => Boolean): scala.collection.Seq[A] = {
+    val elems = Seq.newBuilder[A]
+    while(headOption.exists(f)) {
+      elems += unsafeRemoveFirst()
+    }
+    elems.result()
+  }
+
+  /**
+    * Returns and removes all elements from the right of this queue which satisfy the given predicate
+    *
+    *  @param f   the predicate used for choosing elements
+    *  @return
+    */
+  def removeLastWhile(f: A => Boolean): scala.collection.Seq[A] = {
+    val elems = Seq.newBuilder[A]
+    while(lastOption.exists(f)) {
+      elems += unsafeRemoveLast()
+    }
+    elems.result()
+  }
+
+  /**
+    * Returns the top (front) element of this queue (without removing it) and returns it (None if empty)
+    *
+    * @return
+    */
+  def peek: Option[A] =
+    headOption
 
   override def reverse = foldLeft(new ArrayDeque[A](initialSize = size))(_.prependAssumingCapacity(_))
 

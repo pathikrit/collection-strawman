@@ -19,8 +19,7 @@ class Stack[A] extends ArrayDeque[A] {
     * @param elem
     * @return
     */
-  def push(elem: A): this.type =
-    elem +=: this
+  def push(elem: A): this.type = elem +=: this
 
   /** Push two or more elements onto the stack. The last element
     *  of the sequence will be on top of the new stack.
@@ -28,8 +27,7 @@ class Stack[A] extends ArrayDeque[A] {
     *  @param   elems      the element sequence.
     *  @return the stack with the new elements on top.
     */
-  def push(elem1: A, elem2: A, elems: A*): this.type =
-    push(elem1).push(elem2).pushAll(elems)
+  def push(elem1: A, elem2: A, elems: A*): this.type = push(elem1).push(elem2).pushAll(elems)
 
   /** Push all elements in the given traversable object onto the stack. The
     *  last element in the traversable object will be on top of the new stack.
@@ -37,8 +35,7 @@ class Stack[A] extends ArrayDeque[A] {
     *  @param elems the traversable object.
     *  @return the stack with the new elements on top.
     */
-  def pushAll(elems: TraversableOnce[A]): this.type =
-    elems ++=: this
+  def pushAll(elems: TraversableOnce[A]): this.type = elems ++=: this
 
   /**
     * Removes the top element from this stack and return it
@@ -46,16 +43,14 @@ class Stack[A] extends ArrayDeque[A] {
     * @return
     * @throws java.util.NoSuchElementException when stack is empty
     */
-  def pop(): A =
-    removeFirst().getOrElse(throw new java.util.NoSuchElementException("empty stack"))
+  def pop(): A = unsafeRemoveFirst()
 
   /**
     * Pop all elements from this stack and return it
     *
     * @return
     */
-  def popAll(): scala.collection.Seq[A] =
-    removeAll()
+  def popAll(): scala.collection.Seq[A] = removeAll()
 
   /**
     * Returns and removes all elements from the top of this stack which satisfy the given predicate
@@ -63,19 +58,5 @@ class Stack[A] extends ArrayDeque[A] {
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def popWhile(f: A => Boolean): scala.collection.Seq[A] = {
-    val elems = Seq.newBuilder[A]
-    while(peek.exists(f)) {
-      elems += pop()
-    }
-    elems.result()
-  }
-
-  /**
-    * Returns the next element of this stack (without removing it) and returns it (None if empty)
-    *
-    * @return
-    */
-  def peek: Option[A] =
-    headOption
+  def popWhile(f: A => Boolean): scala.collection.Seq[A] = removeHeadWhile(f)
 }
