@@ -198,8 +198,8 @@ class ArrayDeque[A] private[ArrayDeque](
     if (isEmpty) None else Some(unsafeRemoveFirst(resizeInternalRepr))
 
   /**
-    * Unsafely remove the last element (throws exception when empty)
-    * See also removelast()
+    * Unsafely remove the first element (throws exception when empty)
+    * See also removeFirst()
     *
     * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
     * @throws NoSuchElementException when empty
@@ -295,10 +295,8 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def nonEmpty = start != end
 
-  override def clone() = {
-    // TODO Scala's array.clone should call java.util.Arrays.copyOf(array, array.length)
-    new ArrayDeque(java.util.Arrays.copyOf(array, array.length), start, end)
-  }
+  override def clone() = new ArrayDeque(array.clone(), start = start, end = end)
+
   /**
     * Note: This does not actually resize the internal representation.
     * See clearAndShrink if you want to also resize internally
