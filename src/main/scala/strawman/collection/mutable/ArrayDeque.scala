@@ -126,9 +126,25 @@ class ArrayDeque[A] private[ArrayDeque](
     this
   }
 
+  override def ++=(elems: scala.collection.TraversableOnce[A]) = {
+    if (elems.nonEmpty) {
+      ArrayDeque.knownSize(elems) match {
+        case srcLength if srcLength >= 0 =>
+          sizeHint(srcLength + this.length)
+          elems.foreach(appendAssumingCapacity)
+        case _ => elems.foreach(+=)
+      }
+    }
+    this
+  }
+
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
     requireBounds(idx)
-    if (elems.nonEmpty) {
+    if (idx == 0) {
+      elems ++=: this
+    } else if (idx == length - 1) {
+      this ++= elems
+    } else if (elems.nonEmpty) {
       ArrayDeque.knownSize(elems) match {
         case srcLength if srcLength >= 0 =>
           val finalLength = srcLength + this.length

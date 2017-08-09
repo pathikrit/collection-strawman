@@ -28,6 +28,8 @@ class ArrayDequeTest {
     apply(_.trimEnd(3))
     apply(_.insertAll(0, Seq(9, 10, 11)))
     apply(_.insertAll(1, Seq(12, 13)))
+    apply(_.insertAll(0, Seq(23, 24)))
+    apply(_ ++= Seq(25, 26))
     apply(_.insertAll(1, IndexedSeq(18, 2113)))
     apply(_.remove(2))
     apply(_.prependAll(Seq(14, 15, 16, 17)))
