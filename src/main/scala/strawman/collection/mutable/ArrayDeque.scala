@@ -3,6 +3,7 @@ package collection.mutable
 
 import scala._
 import scala.collection.{generic, mutable}
+import scala.collection.generic.CanBuildFrom
 import scala.reflect.ClassTag
 import scala.Predef.{assert, require}
 
@@ -287,10 +288,22 @@ class ArrayDeque[A] private[ArrayDeque](
     *
     * @return
     */
-  def peek: Option[A] =
-    headOption
+  def peek: Option[A] = headOption
 
-  override def reverse = foldLeft(new ArrayDeque[A](initialSize = size))(_.prependAssumingCapacity(_))
+  override def reverseIterator = Iterator.tabulate(size)(i => this(size - i - 1))
+
+  override def reverseMap[B, That](f: (A) => B)(implicit bf: CanBuildFrom[ArrayDeque[A], B, That]) = reverse.map(f)
+
+  override def reverse = {
+    val n = size
+    val arr = ArrayDeque.alloc(n)
+    var i = 0
+    while(i < n) {
+      arr(i) = this(n - i - 1).asInstanceOf[AnyRef]
+      i += 1
+    }
+    new ArrayDeque(arr, start = 0, end = n)
+  }
 
   override def sizeHint(hint: Int) = if (isExpansionNeeded(hint)) resize(hint + 1)
 
@@ -377,7 +390,7 @@ class ArrayDeque[A] private[ArrayDeque](
       val block1 = Math.min(toCopy, array.length - startIdx)
       Array.copy(src = array, srcPos = startIdx, dest = dest, destPos = destStart, length = block1)
       if (block1 < toCopy) {
-        Array.copy(src = array, srcPos = 0, dest = dest, destPos = block1, length = toCopy - block1)
+        Array.copy(src = array, srcPos = 0, dest = dest, destPos = destStart + block1, length = toCopy - block1)
       }
     }
     dest
