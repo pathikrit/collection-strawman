@@ -2,9 +2,9 @@ package strawman
 package collection.mutable
 
 import scala._
-import scala.collection.{GenSeq, generic, mutable}
+import scala.collection.{generic, mutable}
 import scala.reflect.ClassTag
-import scala.Predef.{assert, require, genericWrapArray}
+import scala.Predef.{assert, require}
 
 import java.lang.Math
 import java.util.NoSuchElementException
@@ -52,7 +52,8 @@ class ArrayDeque[A] private[ArrayDeque](
 
   private[this] def reset(array: Array[AnyRef], start: Int, end: Int) = {
     assert((array.length & (array.length - 1)) == 0, s"Array.length must be power of 2")
-    assert(array.isDefinedAt(start) && array.isDefinedAt(end))
+    requireBounds(start, 0, array.length)
+    requireBounds(end, 0, array.length)
     this.array = array
     this.start = start
     this.end = end
@@ -61,12 +62,12 @@ class ArrayDeque[A] private[ArrayDeque](
   def this(initialSize: Int = ArrayDeque.DefaultInitialSize) = this(ArrayDeque.alloc(initialSize), 0, 0)
 
   override def apply(idx: Int) = {
-    ArrayDeque.checkIndex(idx, this)
+    requireBounds(idx)
     _get(idx)
   }
 
   override def update(idx: Int, elem: A) = {
-    ArrayDeque.checkIndex(idx, this)
+    requireBounds(idx)
     _set(idx, elem)
   }
 
@@ -107,7 +108,7 @@ class ArrayDeque[A] private[ArrayDeque](
           copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = size)
           reset(array = array2, start = 0, end = finalLength)
 
-        // /Just fill up from (start - srcLength) to (start - 1) and move back start
+        // Just fill up from (start - srcLength) to (start - 1) and move back start
         case _srcLength =>
           val srcLength = if (_srcLength < 0) elems.size else _srcLength
           sizeHint(srcLength + this.length)
@@ -125,7 +126,7 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]): Unit = {
-    ArrayDeque.checkIndex(idx, this)
+    requireBounds(idx)
     if (elems.nonEmpty) {
       ArrayDeque.knownSize(elems) match {
         case srcLength if srcLength >= 0 =>
@@ -156,7 +157,7 @@ class ArrayDeque[A] private[ArrayDeque](
   override def remove(idx: Int, count: Int) = {
     require(count >= 0, s"removing negative number of elements: $count")
     if (count > 0) {
-      ArrayDeque.checkIndex(idx, this)
+      requireBounds(idx)
       val removals = Math.min(size - idx, count)
       // If we are removing more than half the elements, its cheaper to start over
       // Else, choose the shorter: either move the prefix (0 until (idx + removals) right OR the suffix (idx to size) left
@@ -368,8 +369,8 @@ class ArrayDeque[A] private[ArrayDeque](
     * @param maxItems
     */
   def copySliceToArray(srcStart: Int, dest: Array[_], destStart: Int, maxItems: Int): dest.type = {
-    ArrayDeque.checkIndex(srcStart, this)
-    ArrayDeque.checkIndex(destStart, dest)
+    requireBounds(srcStart)
+    requireBounds(destStart, 0, dest.length)
     val toCopy = Math.min(maxItems, Math.min(size - srcStart, dest.length - destStart))
     if (toCopy > 0) {
       val startIdx = start_+(srcStart)
@@ -420,6 +421,9 @@ class ArrayDeque[A] private[ArrayDeque](
       reset(array = array2, start = 0, end = size)
     }
   }
+
+  @inline private[this] def requireBounds(idx: Int, from: Int = 0, until: Int = size) =
+    if (idx < 0 || until <= idx) throw new IndexOutOfBoundsException(idx.toString)
 }
 
 object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
@@ -450,7 +454,4 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
 
   private[ArrayDeque] def nextPowerOfTwo(i: Int): Int =
     ((1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(i)) << 1
-
-  @inline private[ArrayDeque] def checkIndex(idx: Int, seq: GenSeq[_]) =
-    if (!seq.isDefinedAt(idx)) throw new IndexOutOfBoundsException(idx.toString)
 }
