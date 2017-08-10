@@ -1,7 +1,7 @@
 package strawman
 package collection.mutable
 
-import scala._
+import scala.{Int, Option, None, inline, Serializable, Unit, Array, StringContext, Iterator, Boolean, Some, AnyRef, IndexOutOfBoundsException, SerialVersionUID}
 import scala.collection.{generic, mutable}
 import scala.reflect.ClassTag
 import scala.Predef.{assert, require}
@@ -72,12 +72,12 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def +=(elem: A) = {
-    sizeHint(size)
+    sizeHint(size + 1)
     appendAssumingCapacity(elem)
   }
 
   override def +=:(elem: A) = {
-    sizeHint(size)
+    sizeHint(size + 1)
     prependAssumingCapacity(elem)
   }
 
@@ -294,7 +294,7 @@ class ArrayDeque[A] private[ArrayDeque](
     *  @return
     */
   def removeHeadWhile(f: A => Boolean): scala.collection.Seq[A] = {
-    val elems = Seq.newBuilder[A]
+    val elems = scala.collection.Seq.newBuilder[A]
     while(headOption.exists(f)) {
       elems += removeHeadAssumingNonEmpty()
     }
@@ -308,7 +308,7 @@ class ArrayDeque[A] private[ArrayDeque](
     *  @return
     */
   def removeLastWhile(f: A => Boolean): scala.collection.Seq[A] = {
-    val elems = Seq.newBuilder[A]
+    val elems = scala.collection.Seq.newBuilder[A]
     while(lastOption.exists(f)) {
       elems += removeLastAssumingNonEmpty()
     }
@@ -470,9 +470,9 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     */
   private[ArrayDeque] final val StableSize = 128
 
-  private[ArrayDeque] def knownSize[A](coll: TraversableOnce[A]) = {
+  private[ArrayDeque] def knownSize[A](coll: scala.collection.TraversableOnce[A]) = {
     //TODO: Remove this temporary util when we switch to strawman .sizeHintIfCheap is now .knownSize
-    if (coll.isInstanceOf[List[_]] || coll.isInstanceOf[Stream[_]] || coll.isInstanceOf[Iterator[_]] || !coll.isTraversableAgain) -1 else coll.size
+    if (coll.isInstanceOf[scala.List[_]] || coll.isInstanceOf[scala.Stream[_]] || coll.isInstanceOf[scala.Iterator[_]] || !coll.isTraversableAgain) -1 else coll.size
   }
 
   /**
@@ -484,7 +484,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     */
   private[ArrayDeque] def alloc(len: Int) = {
     assert(len >= 0)
-    val size = (1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(len)
+    val size = (1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(len) << 1
     require(size >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len")
     new Array[AnyRef](Math.max(size, DefaultInitialSize))
   }
