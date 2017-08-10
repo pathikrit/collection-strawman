@@ -101,7 +101,7 @@ class ArrayDeque[A] private[ArrayDeque](
         case srcLength if srcLength < 0 && !elems.isTraversableAgain => elems.toIndexedSeq ++=: this
 
         // We know for sure we need to resize to hold everything, might as well resize and memcopy upfront
-        case srcLength if srcLength > 0 && isExpansionNeeded(srcLength + this.length) =>
+        case srcLength if srcLength > 0 && isResizeNecessary(srcLength + this.length) =>
           val finalLength = srcLength + this.length
           val array2 = ArrayDeque.alloc(finalLength)
           elems.copyToArray(array2.asInstanceOf[Array[A]])
@@ -147,7 +147,7 @@ class ArrayDeque[A] private[ArrayDeque](
       val srcLength = elems.size
       val finalLength = srcLength + this.length
       // Either we resize right away or move prefix left or suffix right
-      if (isExpansionNeeded(finalLength)) {
+      if (isResizeNecessary(finalLength)) {
         val array2 = ArrayDeque.alloc(finalLength)
         copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
         elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
@@ -337,7 +337,7 @@ class ArrayDeque[A] private[ArrayDeque](
     new ArrayDeque(arr, start = 0, end = n)
   }
 
-  override def sizeHint(hint: Int) = if (isExpansionNeeded(hint)) resize(hint + 1)
+  override def sizeHint(hint: Int) = if (hint > size && isResizeNecessary(hint)) resize(hint + 1)
 
   override def length = end_-(start)
 
@@ -440,16 +440,13 @@ class ArrayDeque[A] private[ArrayDeque](
   @inline private[this] def end_-(idx: Int) = (end - idx) & (array.length - 1)
 
   @inline private[this] def isResizeNecessary(len: Int) = {
-    val newLength = ArrayDeque.requiredArrayLength(len)
     // Either resize if we need more cells OR we need to downsize BUT not a good idea to repeatedly resize small arrays
-    newLength > array.length || (newLength < array.length && array.length >= ArrayDeque.StableSize)
+    len >= (array.length - 1) || (2*len < array.length && array.length >= ArrayDeque.StableSize)
   }
 
   @inline private[this] def _get(idx: Int): A = array(start_+(idx)).asInstanceOf[A]
 
   @inline private[this] def _set(idx: Int, elem: A) = array(start_+(idx)) = elem.asInstanceOf[AnyRef]
-
-  @inline private[this] def isExpansionNeeded(len: Int) = len >= (array.length - 1)
 
   private[this] def resize(len: Int) = if (isResizeNecessary(len)) {
     val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
@@ -486,15 +483,9 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     * @return
     */
   private[ArrayDeque] def alloc(len: Int) = {
-    val size = requiredArrayLength(len)
+    assert(len >= 0)
+    val size = (1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(len)
     require(size >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len")
     new Array[AnyRef](Math.max(size, DefaultInitialSize))
   }
-
-  /**
-    * @param i
-    * @return next power of 2 strictly greater than i
-    */
-  private[ArrayDeque] def requiredArrayLength(i: Int): Int =
-    ((1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(i)) << 1
 }
