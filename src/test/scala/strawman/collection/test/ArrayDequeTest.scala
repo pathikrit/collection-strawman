@@ -16,7 +16,7 @@ class ArrayDequeTest {
     val buffer2 = mutable.ArrayBuffer.empty[Int]
 
     def apply[U](f: mutable.Buffer[Int] => U) = {
-      //println(s"Before: [buffer1=${buffer}; buffer2=${buffer2}]")
+      println(s"Before: [buffer1=${buffer}; buffer2=${buffer2}]")
       assert(f(buffer) == f(buffer2))
       assert(buffer == buffer2)
       assert(buffer.reverse == buffer2.reverse)
@@ -30,11 +30,12 @@ class ArrayDequeTest {
     apply(_.insertAll(1, Seq(12, 13)))
     apply(_.insertAll(0, Seq(23, 24)))
     apply(_ ++= Seq(25, 26))
-    apply(_.insertAll(1, IndexedSeq(18, 2113)))
+    apply(_.insertAll(3, IndexedSeq(18, 33)))
     apply(_.remove(2))
     apply(_.prependAll(Seq(14, 15, 16, 17)))
     apply(_.remove(1, 5))
     apply(_.prependAll(Seq.tabulate(100)(identity)))
+    apply(b => b.insertAll(b.length - 5, Seq.tabulate(10)(identity)))
     buffer.trimToSize()
     apply(_.appendAll(Seq.tabulate(100)(identity)))
     apply(_.appendAll(Iterator.tabulate(100)(identity)))

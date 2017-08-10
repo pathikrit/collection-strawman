@@ -145,28 +145,39 @@ class ArrayDeque[A] private[ArrayDeque](
     } else if (idx == length - 1) {
       this ++= elems
     } else if (elems.nonEmpty) {
-      ArrayDeque.knownSize(elems) match {
-        case srcLength if srcLength >= 0 =>
-          val finalLength = srcLength + this.length
-          // Either we resize right away or move prefix left or suffix right
-          if (isExpansionNeeded(finalLength)) {
-            val array2 = ArrayDeque.alloc(finalLength)
-            copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
-            elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
-            copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
-            reset(array = array2, start = 0, end = finalLength)
-          } else if (2*idx >= length) { // Cheaper to shift the suffix right
-            val suffix = drop(idx)
-            end = start_+(idx)
-            elems.foreach(appendAssumingCapacity)
-            suffix.foreach(appendAssumingCapacity)
-          } else {  // Cheaper to shift prefix left
-            val prefix = take(idx)
-            start = start_+(idx)
-            prefix ++=: elems ++=: this
-          }
-        case _ => //Expensive to compute size, retry using IndexedSeq
-          insertAll(idx, elems.toIndexedSeq)
+      val srcLength = elems.size
+      val finalLength = srcLength + this.length
+      // Either we resize right away or move prefix left or suffix right
+      if (isExpansionNeeded(finalLength)) {
+        val array2 = ArrayDeque.alloc(finalLength)
+        copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
+        elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
+        copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
+        reset(array = array2, start = 0, end = finalLength)
+      } else if (2*idx >= length) { // Cheaper to shift the suffix right
+        var i = length - 1
+        while(i >= idx) {
+          _set(i + srcLength, _get(i))
+          i -= 1
+        }
+        end = end_-(-srcLength)
+        val it = elems.toIterator
+        while(it.hasNext) {
+          i += 1
+          _set(i, it.next())
+        }
+      } else {  // Cheaper to shift prefix left
+        var i = 0
+        while(i < idx) {
+          _set(i - srcLength, _get(i))
+          i += 1
+        }
+        start = start_+(-srcLength)
+        val it = elems.toIterator
+        while(it.hasNext) {
+          _set(i, it.next())
+          i += 1
+        }
       }
     }
   }
