@@ -194,7 +194,7 @@ class ArrayDeque[A] private[ArrayDeque](
       if (isResizeNecessary(finalLength)) {
         val array2 = ArrayDeque.alloc(finalLength)
         copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
-        if (suffixStart < n) copySliceToArray(srcStart = suffixStart, dest = array2, destStart = idx, maxItems = n)
+        copySliceToArray(srcStart = suffixStart, dest = array2, destStart = idx, maxItems = n)
         reset(array = array2, start = 0, end = finalLength)
       } else if (2*idx <= finalLength) { // Cheaper to move the prefix right
         var i = suffixStart
@@ -239,7 +239,7 @@ class ArrayDeque[A] private[ArrayDeque](
   def removeHead(resizeInternalRepr: Boolean = false): A =
     if (isEmpty) throw new NoSuchElementException(s"empty collection") else removeHeadAssumingNonEmpty(resizeInternalRepr)
 
-  private[this] def removeHeadAssumingNonEmpty(resizeInternalRepr: Boolean = false): A = {
+  @inline private[this] def removeHeadAssumingNonEmpty(resizeInternalRepr: Boolean = false): A = {
     val elem = array(start)
     array(start) = null
     start = start_+(1)
@@ -266,7 +266,7 @@ class ArrayDeque[A] private[ArrayDeque](
   def removeLast(resizeInternalRepr: Boolean = false): A =
     if (isEmpty) throw new NoSuchElementException(s"empty collection") else removeLastAssumingNonEmpty(resizeInternalRepr)
 
-  private[this] def removeLastAssumingNonEmpty(resizeInternalRepr: Boolean = false): A = {
+  @inline private[this] def removeLastAssumingNonEmpty(resizeInternalRepr: Boolean = false): A = {
     end = end_-(1)
     val elem = array(end)
     array(end) = null
@@ -414,10 +414,10 @@ class ArrayDeque[A] private[ArrayDeque](
     * @param maxItems
     */
   def copySliceToArray(srcStart: Int, dest: Array[_], destStart: Int, maxItems: Int): dest.type = {
-    requireBounds(srcStart)
     requireBounds(destStart, 0, dest.length)
     val toCopy = Math.min(maxItems, Math.min(size - srcStart, dest.length - destStart))
     if (toCopy > 0) {
+      requireBounds(srcStart)
       val startIdx = start_+(srcStart)
       val block1 = Math.min(toCopy, array.length - startIdx)
       Array.copy(src = array, srcPos = startIdx, dest = dest, destPos = destStart, length = block1)
