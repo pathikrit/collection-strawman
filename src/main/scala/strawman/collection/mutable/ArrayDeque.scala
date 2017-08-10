@@ -175,32 +175,30 @@ class ArrayDeque[A] private[ArrayDeque](
     require(count >= 0, s"removing negative number of elements: $count")
     if (count > 0) {
       requireBounds(idx)
-      val removals = Math.min(size - idx, count)
+      val n = size
+      val removals = Math.min(n - idx, count)
+      val finalLength = n - removals
       // If we are removing more than half the elements, its cheaper to start over
-      // Else, choose the shorter: either move the prefix (0 until (idx + removals) right OR the suffix (idx to size) left
-      if (2*removals >= size) {
-        val array2 = ArrayDeque.alloc(size - removals)
+      // Else, choose the shorter: either move the prefix (0 until idx) right OR the suffix (idx+removals until n) left
+      if (2*removals >= n) {
+        val array2 = ArrayDeque.alloc(finalLength)
         copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
-        copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = size)
-        reset(array = array2, start = 0, end = size - removals)
-      } else if (size - idx <= idx + removals) {
-        var i = idx
-        while(i + removals < size) {
-          _set(i, _get(i + removals))
-          setNull(i + removals)
-          i += 1
-        }
-        nullify(from = i)
-        end = end_-(removals)
-      } else {
+        copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = n)
+        reset(array = array2, start = 0, end = finalLength)
+      } else if (2*idx <= finalLength) {
         var i = idx + removals - 1
-        while(i - removals >= 0) {
-          _set(i, _get(i - removals))
-          setNull(i - removals)
+        while(i >= 0) {
+          _set(i, if (i >= removals) _get(i - removals) else null.asInstanceOf[A])
           i -= 1
         }
-        nullify(until = i + 1)
         start = start_+(removals)
+      } else {  // Cheaper to move the suffix left
+        var i = idx
+        while(i < n) {
+          _set(i, if (i < finalLength) _get(i + removals) else null.asInstanceOf[A])
+          i += 1
+        }
+        end = end_-(removals)
       }
     }
   }
@@ -367,7 +365,7 @@ class ArrayDeque[A] private[ArrayDeque](
       clone()
     } else {
       val array2 = copySliceToArray(srcStart = left, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = len)
-      new ArrayDeque(array2, 0, len)
+      new ArrayDeque(array2, start = 0, end = len)
     }
   }
 
@@ -435,18 +433,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   @inline private[this] def _set(idx: Int, elem: A) = array(start_+(idx)) = elem.asInstanceOf[AnyRef]
 
-  @inline private[this] def setNull(idx: Int) = _set(idx, null.asInstanceOf[A])
-
   @inline private[this] def isExpansionNeeded(len: Int) = len >= (array.length - 1)
-
-  private[this] def nullify(from: Int = 0, until: Int = size) = {
-    // Optimized version of `from.until(until).foreach(setNull)`
-    var i = from
-    while(i < until) {
-      setNull(i)
-      i += 1
-    }
-  }
 
   private[this] def resize(len: Int) = {
     if (ArrayDeque.nextPowerOfTwo(len) != array.length) {
