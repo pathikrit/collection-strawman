@@ -84,17 +84,17 @@ class ArrayDeque[A] private[ArrayDeque](
 
   @inline private[ArrayDeque] def appendAssumingCapacity(elem: A): this.type = {
     array(end) = elem.asInstanceOf[AnyRef]
-    end = end_-(-1)
+    end = end_+(1)
     this
   }
 
   @inline private[ArrayDeque] def prependAssumingCapacity(elem: A): this.type = {
-    start = start_+(-1)
+    start = start_-(1)
     array(start) = elem.asInstanceOf[AnyRef]
     this
   }
 
-  override def ++=:(elems: TraversableOnce[A]) = {
+  override def ++=:(elems: scala.collection.TraversableOnce[A]) = {
     if (elems.nonEmpty) {
       // The following code resizes the current collection atmost once and traverses elems atmost twice
       ArrayDeque.knownSize(elems) match {
@@ -120,7 +120,7 @@ class ArrayDeque[A] private[ArrayDeque](
             _set(i - srcLength, it.next())
             i += 1
           }
-          start = start_+(-srcLength)
+          start = start_-(srcLength)
       }
     }
     this
@@ -160,7 +160,7 @@ class ArrayDeque[A] private[ArrayDeque](
           _set(i + srcLength, _get(i))
           i -= 1
         }
-        end = end_-(-srcLength)
+        end = end_+(srcLength)
         val it = elems.toIterator
         while(it.hasNext) {
           i += 1
@@ -172,7 +172,7 @@ class ArrayDeque[A] private[ArrayDeque](
           _set(i - srcLength, _get(i))
           i += 1
         }
-        start = start_+(-srcLength)
+        start = start_-(srcLength)
         val it = elems.toIterator
         while(it.hasNext) {
           _set(i, it.next())
@@ -430,14 +430,10 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def trimToSize(): Unit = resize(size - 1)
 
-  /**
-    * Add idx to start modulo mask
-    */
+  // Utils for common modular arithmetic:
   @inline private[this] def start_+(idx: Int) = (start + idx) & (array.length - 1)
-
-  /**
-    * Subtract idx from end modulo mask
-    */
+  @inline private[this] def start_-(idx: Int) = (start + idx) & (array.length - 1)
+  @inline private[this] def end_+(idx: Int) = (end + idx) & (array.length - 1)
   @inline private[this] def end_-(idx: Int) = (end - idx) & (array.length - 1)
 
   @inline private[this] def _get(idx: Int): A = array(start_+(idx)).asInstanceOf[A]
