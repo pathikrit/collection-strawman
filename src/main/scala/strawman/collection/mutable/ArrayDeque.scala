@@ -439,7 +439,11 @@ class ArrayDeque[A] private[ArrayDeque](
   @inline private[this] def end_+(idx: Int) = (end + idx) & (array.length - 1)
   @inline private[this] def end_-(idx: Int) = (end - idx) & (array.length - 1)
 
-  @inline private[this] def isResizeNecessary(len: Int) = ArrayDeque.requiredArrayLength(len) != array.length
+  @inline private[this] def isResizeNecessary(len: Int) = {
+    val newLength = ArrayDeque.requiredArrayLength(len)
+    // Either resize if we need more cells OR we need to downsize BUT not a good idea to repeatedly resize small arrays
+    newLength > array.length || (newLength < array.length && array.length >= ArrayDeque.StableSize)
+  }
 
   @inline private[this] def _get(idx: Int): A = array(start_+(idx)).asInstanceOf[A]
 
@@ -463,6 +467,11 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
   override def newBuilder[A]: mutable.Builder[A, ArrayDeque[A]] = new ArrayDeque[A]()
 
   final val DefaultInitialSize = 8
+
+  /**
+    * We try to not repeatedly resize arrays smaller than this
+    */
+  private[ArrayDeque] final val StableSize = 128
 
   private[ArrayDeque] def knownSize[A](coll: TraversableOnce[A]) = {
     //TODO: Remove this temporary util when we switch to strawman .sizeHintIfCheap is now .knownSize
