@@ -3,7 +3,6 @@ package collection.mutable
 
 import scala._
 import scala.collection.{generic, mutable}
-import scala.collection.generic.CanBuildFrom
 import scala.reflect.ClassTag
 import scala.Predef.{assert, require}
 
@@ -53,14 +52,14 @@ class ArrayDeque[A] private[ArrayDeque](
 
   private[this] def reset(array: Array[AnyRef], start: Int, end: Int) = {
     assert((array.length & (array.length - 1)) == 0, s"Array.length must be power of 2")
-    requireBounds(start, 0, array.length)
-    requireBounds(end, 0, array.length)
+    requireBounds(idx = start, until = array.length)
+    requireBounds(idx = end, until = array.length)
     this.array = array
     this.start = start
     this.end = end
   }
 
-  def this(initialSize: Int = ArrayDeque.DefaultInitialSize) = this(ArrayDeque.alloc(initialSize), 0, 0)
+  def this(initialSize: Int = ArrayDeque.DefaultInitialSize) = this(ArrayDeque.alloc(initialSize), start = 0, end = 0)
 
   override def apply(idx: Int) = {
     requireBounds(idx)
@@ -257,7 +256,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   /**
     * Unsafely remove the last element (throws exception when empty)
-    * See also removelast()
+    * See also removeLastOption()
     *
     * @param resizeInternalRepr If this is set, resize the internal representation to reclaim space once in a while
     * @throws NoSuchElementException when empty
@@ -279,9 +278,12 @@ class ArrayDeque[A] private[ArrayDeque](
     * @return
     */
   def removeAll(): scala.collection.Seq[A] = {
-    val elems = toSeq
-    clear()
-    elems
+    val elems = scala.collection.Seq.newBuilder[A]
+    elems.sizeHint(size)
+    while(nonEmpty) {
+      elems += removeHeadAssumingNonEmpty()
+    }
+    elems.result()
   }
 
   /**
@@ -321,7 +323,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def reverseIterator = Iterator.tabulate(size)(i => this(size - i - 1))
 
-  override def reverseMap[B, That](f: (A) => B)(implicit bf: CanBuildFrom[ArrayDeque[A], B, That]) = reverse.map(f)
+  override def reverseMap[B, That](f: (A) => B)(implicit bf: generic.CanBuildFrom[ArrayDeque[A], B, That]) = reverse.map(f)
 
   override def reverse = {
     val n = size
@@ -432,7 +434,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   // Utils for common modular arithmetic:
   @inline private[this] def start_+(idx: Int) = (start + idx) & (array.length - 1)
-  @inline private[this] def start_-(idx: Int) = (start + idx) & (array.length - 1)
+  @inline private[this] def start_-(idx: Int) = (start - idx) & (array.length - 1)
   @inline private[this] def end_+(idx: Int) = (end + idx) & (array.length - 1)
   @inline private[this] def end_-(idx: Int) = (end - idx) & (array.length - 1)
 

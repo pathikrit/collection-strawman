@@ -16,7 +16,7 @@ class ArrayDequeTest {
     val buffer2 = mutable.ArrayBuffer.empty[Int]
 
     def apply[U](f: mutable.Buffer[Int] => U) = {
-      println(s"Before: [buffer1=${buffer}; buffer2=${buffer2}]")
+      //println(s"Before: [buffer1=${buffer}; buffer2=${buffer2}]")
       assert(f(buffer) == f(buffer2))
       assert(buffer == buffer2)
       assert(buffer.reverse == buffer2.reverse)
