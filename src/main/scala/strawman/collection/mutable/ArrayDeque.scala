@@ -188,18 +188,19 @@ class ArrayDeque[A] private[ArrayDeque](
       val n = size
       val removals = Math.min(n - idx, count)
       val finalLength = n - removals
-      // If we are removing more than half the elements, its cheaper to start over
+      val suffixStart = idx + removals
+      // If we know we can resize after removing, do it right away using arrayCopy
       // Else, choose the shorter: either move the prefix (0 until idx) right OR the suffix (idx+removals until n) left
-      if (2*removals >= n) {
+      if (isResizeNecessary(finalLength)) {
         val array2 = ArrayDeque.alloc(finalLength)
         copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
-        copySliceToArray(srcStart = idx + removals - 1, dest = array2, destStart = idx, maxItems = n)
+        if (suffixStart < n) copySliceToArray(srcStart = suffixStart, dest = array2, destStart = idx, maxItems = n)
         reset(array = array2, start = 0, end = finalLength)
-      } else if (2*idx <= finalLength) {
-        var i = idx + removals - 1
+      } else if (2*idx <= finalLength) { // Cheaper to move the prefix right
+        var i = suffixStart
         while(i >= 0) {
-          _set(i, if (i >= removals) _get(i - removals) else null.asInstanceOf[A])
           i -= 1
+          _set(i, if (i >= removals) _get(i - removals) else null.asInstanceOf[A])
         }
         start = start_+(removals)
       } else {  // Cheaper to move the suffix left
@@ -295,7 +296,7 @@ class ArrayDeque[A] private[ArrayDeque](
   def removeHeadWhile(f: A => Boolean): scala.collection.Seq[A] = {
     val elems = Seq.newBuilder[A]
     while(headOption.exists(f)) {
-      elems += removeHead()
+      elems += removeHeadAssumingNonEmpty()
     }
     elems.result()
   }
@@ -309,7 +310,7 @@ class ArrayDeque[A] private[ArrayDeque](
   def removeLastWhile(f: A => Boolean): scala.collection.Seq[A] = {
     val elems = Seq.newBuilder[A]
     while(lastOption.exists(f)) {
-      elems += removeLast()
+      elems += removeLastAssumingNonEmpty()
     }
     elems.result()
   }
@@ -438,17 +439,17 @@ class ArrayDeque[A] private[ArrayDeque](
   @inline private[this] def end_+(idx: Int) = (end + idx) & (array.length - 1)
   @inline private[this] def end_-(idx: Int) = (end - idx) & (array.length - 1)
 
+  @inline private[this] def isResizeNecessary(len: Int) = ArrayDeque.requiredArrayLength(len) != array.length
+
   @inline private[this] def _get(idx: Int): A = array(start_+(idx)).asInstanceOf[A]
 
   @inline private[this] def _set(idx: Int, elem: A) = array(start_+(idx)) = elem.asInstanceOf[AnyRef]
 
   @inline private[this] def isExpansionNeeded(len: Int) = len >= (array.length - 1)
 
-  private[this] def resize(len: Int) = {
-    if (ArrayDeque.nextPowerOfTwo(len) != array.length) {
-      val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
-      reset(array = array2, start = 0, end = size)
-    }
+  private[this] def resize(len: Int) = if (isResizeNecessary(len)) {
+    val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
+    reset(array = array2, start = 0, end = size)
   }
 
   @inline private[this] def requireBounds(idx: Int, from: Int = 0, until: Int = size) =
@@ -476,11 +477,15 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     * @return
     */
   private[ArrayDeque] def alloc(len: Int) = {
-    val size = nextPowerOfTwo(len)
+    val size = requiredArrayLength(len)
     require(size >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len")
     new Array[AnyRef](Math.max(size, DefaultInitialSize))
   }
 
-  private[ArrayDeque] def nextPowerOfTwo(i: Int): Int =
+  /**
+    * @param i
+    * @return next power of 2 strictly greater than i
+    */
+  private[ArrayDeque] def requiredArrayLength(i: Int): Int =
     ((1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(i)) << 1
 }
