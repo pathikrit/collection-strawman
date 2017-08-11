@@ -1,28 +1,27 @@
-package strawman.collection.test
+package strawman.collection.mutable
 
 import scala._
 import scala.collection.mutable
 import scala.Predef._
 
-import java.lang.System
+import java.lang.System.nanoTime
 
 object ArrayDequeBenchmark extends App {
-  val candidates: Seq[mutable.Buffer[Int]] = Seq(
+  val candidates = Seq(
     strawman.collection.mutable.ArrayDeque.empty[Int],
-    mutable.ArrayBuffer.empty[Int]
+    scala.collection.mutable.ArrayBuffer.empty[Int]
   )
 
   def benchmark[U](name: String, f: mutable.Buffer[Int] => U) = {
     def profile(buffer: mutable.Buffer[Int]) = {
-      val t1 = System.nanoTime()
+      val t1 = nanoTime()
       f(buffer)
-      (System.nanoTime() - t1)/1e6
+      (nanoTime() - t1)/1e6
     }
     println(s"===============[$name]=================")
     candidates foreach (c =>
       println(f"${c.getClass.getSimpleName}%12s: ${profile(c)}%8.2f ms")
     )
-    System.gc()
   }
 
   val range10m = (1 to 1e7.toInt).toArray

@@ -364,7 +364,6 @@ class ArrayDeque[A] private[ArrayDeque](
     * @return
     */
   def clearAndShrink(size: Int = ArrayDeque.DefaultInitialSize): this.type = {
-    require(size >= 0, s"Non-negative size required")
     reset(array = ArrayDeque.alloc(size), start = 0, end = 0)
     this
   }
@@ -462,12 +461,12 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
 
   override def newBuilder[A]: mutable.Builder[A, ArrayDeque[A]] = new ArrayDeque[A]()
 
-  final val DefaultInitialSize = 8
+  final val DefaultInitialSize = 16
 
   /**
     * We try to not repeatedly resize arrays smaller than this
     */
-  private[ArrayDeque] final val StableSize = 128
+  private[ArrayDeque] final val StableSize = 256
 
   private[ArrayDeque] def knownSize[A](coll: scala.collection.TraversableOnce[A]) = {
     //TODO: Remove this temporary util when we switch to strawman .sizeHintIfCheap is now .knownSize
@@ -482,7 +481,7 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     * @return
     */
   private[ArrayDeque] def alloc(len: Int) = {
-    assert(len >= 0)
+    require(len >= 0, s"Non-negative array size required")
     val size = (1 << 31) >>> java.lang.Integer.numberOfLeadingZeros(len) << 1
     require(size >= 0, s"ArrayDeque too big - cannot allocate ArrayDeque of length $len")
     new Array[AnyRef](Math.max(size, DefaultInitialSize))
