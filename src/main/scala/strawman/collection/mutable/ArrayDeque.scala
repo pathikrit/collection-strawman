@@ -337,7 +337,7 @@ class ArrayDeque[A] private[ArrayDeque](
     new ArrayDeque(arr, start = 0, end = n)
   }
 
-  override def sizeHint(hint: Int) = if (hint > size && isResizeNecessary(hint)) resize(hint + 1)
+  @inline override def sizeHint(hint: Int) = if (hint > size && isResizeNecessary(hint)) resize(hint + 1)
 
   override def length = end_-(start)
 
@@ -421,9 +421,8 @@ class ArrayDeque[A] private[ArrayDeque](
       val startIdx = start_+(srcStart)
       val block1 = Math.min(toCopy, array.length - startIdx)
       Array.copy(src = array, srcPos = startIdx, dest = dest, destPos = destStart, length = block1)
-      if (block1 < toCopy) {
-        Array.copy(src = array, srcPos = 0, dest = dest, destPos = destStart + block1, length = toCopy - block1)
-      }
+      val block2 = toCopy - block1
+      if (block2 > 0) Array.copy(src = array, srcPos = 0, dest = dest, destPos = destStart + block1, length = block2)
     }
     dest
   }
