@@ -72,12 +72,12 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def +=(elem: A) = {
-    sizeHint(size + 1)
+    sizeHint(length + 1)
     appendAssumingCapacity(elem)
   }
 
   override def +=:(elem: A) = {
-    sizeHint(size + 1)
+    sizeHint(length + 1)
     prependAssumingCapacity(elem)
   }
 
@@ -95,23 +95,24 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def ++=:(elems: scala.collection.TraversableOnce[A]) = {
     if (elems.nonEmpty) {
+      val n = length
       // The following code resizes the current collection atmost once and traverses elems atmost twice
       ArrayDeque.knownSize(elems) match {
         // Size is too expensive to compute AND we can traverse it only once - can't do much but retry with an IndexedSeq
         case srcLength if srcLength < 0 && !elems.isTraversableAgain => elems.toIndexedSeq ++=: this
 
         // We know for sure we need to resize to hold everything, might as well resize and memcopy upfront
-        case srcLength if srcLength > 0 && isResizeNecessary(srcLength + this.length) =>
-          val finalLength = srcLength + this.length
+        case srcLength if srcLength > 0 && isResizeNecessary(srcLength + n) =>
+          val finalLength = srcLength + n
           val array2 = ArrayDeque.alloc(finalLength)
           elems.copyToArray(array2.asInstanceOf[Array[A]])
-          copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = size)
+          copySliceToArray(srcStart = 0, dest = array2, destStart = srcLength, maxItems = n)
           reset(array = array2, start = 0, end = finalLength)
 
         // Just fill up from (start - srcLength) to (start - 1) and move back start
         case _srcLength =>
           val srcLength = if (_srcLength < 0) elems.size else _srcLength
-          sizeHint(srcLength + this.length)
+          sizeHint(srcLength + n)
           // Optimized version of `elems.zipWithIndex.foreach((elem, i) => _set(i - srcLength, elem))`
           var i = 0
           val it = elems.toIterator
@@ -129,7 +130,7 @@ class ArrayDeque[A] private[ArrayDeque](
     if (elems.nonEmpty) {
       ArrayDeque.knownSize(elems) match {
         case srcLength if srcLength >= 0 =>
-          sizeHint(srcLength + this.length)
+          sizeHint(srcLength + length)
           elems.foreach(appendAssumingCapacity)
         case _ => elems.foreach(+=)
       }
@@ -139,22 +140,23 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
     requireBounds(idx)
+    val n = length
     if (idx == 0) {
       elems ++=: this
-    } else if (idx == length - 1) {
+    } else if (idx == n - 1) {
       this ++= elems
     } else if (elems.nonEmpty) {
       val srcLength = elems.size
-      val finalLength = srcLength + this.length
+      val finalLength = srcLength + n
       // Either we resize right away or move prefix left or suffix right
       if (isResizeNecessary(finalLength)) {
         val array2 = ArrayDeque.alloc(finalLength)
         copySliceToArray(srcStart = 0, dest = array2, destStart = 0, maxItems = idx)
         elems.copyToArray(array2.asInstanceOf[Array[A]], idx)
-        copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = size)
+        copySliceToArray(srcStart = idx, dest = array2, destStart = idx + srcLength, maxItems = n)
         reset(array = array2, start = 0, end = finalLength)
-      } else if (2*idx >= length) { // Cheaper to shift the suffix right
-        var i = length - 1
+      } else if (2*idx >= n) { // Cheaper to shift the suffix right
+        var i = n - 1
         while(i >= idx) {
           _set(i + srcLength, _get(i))
           i -= 1
@@ -185,7 +187,7 @@ class ArrayDeque[A] private[ArrayDeque](
     require(count >= 0, s"removing negative number of elements: $count")
     if (count > 0) {
       requireBounds(idx)
-      val n = size
+      val n = length
       val removals = Math.min(n - idx, count)
       val finalLength = n - removals
       val suffixStart = idx + removals
@@ -243,7 +245,7 @@ class ArrayDeque[A] private[ArrayDeque](
     val elem = array(start)
     array(start) = null
     start = start_+(1)
-    if (resizeInternalRepr) resize(size)
+    if (resizeInternalRepr) resize(length)
     elem.asInstanceOf[A]
   }
 
@@ -270,7 +272,7 @@ class ArrayDeque[A] private[ArrayDeque](
     end = end_-(1)
     val elem = array(end)
     array(end) = null
-    if (resizeInternalRepr) resize(size)
+    if (resizeInternalRepr) resize(length)
     elem.asInstanceOf[A]
   }
 
@@ -280,7 +282,7 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def removeAll(): scala.collection.Seq[A] = {
     val elems = scala.collection.Seq.newBuilder[A]
-    elems.sizeHint(size)
+    elems.sizeHint(length)
     while(nonEmpty) {
       elems += removeHeadAssumingNonEmpty()
     }
@@ -322,12 +324,15 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def peek: Option[A] = headOption
 
-  override def reverseIterator = Iterator.tabulate(size)(i => this(size - i - 1))
+  override def reverseIterator = {
+    val n = length
+    Iterator.tabulate(n)(i => this(n - i - 1))
+  }
 
   override def reverseMap[B, That](f: (A) => B)(implicit bf: generic.CanBuildFrom[ArrayDeque[A], B, That]) = reverse.map(f)
 
   override def reverse = {
-    val n = size
+    val n = length
     val arr = ArrayDeque.alloc(n)
     var i = 0
     while(i < n) {
@@ -337,7 +342,7 @@ class ArrayDeque[A] private[ArrayDeque](
     new ArrayDeque(arr, start = 0, end = n)
   }
 
-  @inline override def sizeHint(hint: Int) = if (hint > size && isResizeNecessary(hint)) resize(hint + 1)
+  @inline override def sizeHint(hint: Int) = if (hint > length && isResizeNecessary(hint)) resize(hint + 1)
 
   override def length = end_-(start)
 
@@ -369,12 +374,13 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def slice(from: Int, until: Int) = {
-    val left = if (from <= 0) 0 else if (from >= size) size else from
-    val right = if (until <= 0) 0 else if (until >= size) size else until
+    val n = length
+    val left = Math.max(0, Math.min(n, from))
+    val right = Math.max(0, Math.min(n, until))
     val len = right - left
     if (len <= 0) {
       ArrayDeque.empty[A]
-    } else if (len >= size) {
+    } else if (len >= n) {
       clone()
     } else {
       val array2 = copySliceToArray(srcStart = left, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = len)
@@ -400,7 +406,7 @@ class ArrayDeque[A] private[ArrayDeque](
   override def stringPrefix = "ArrayDeque"
 
   override def toArray[B >: A: ClassTag] =
-    copySliceToArray(srcStart = 0, dest = new Array[B](size), destStart = 0, maxItems = size)
+    copySliceToArray(srcStart = 0, dest = new Array[B](length), destStart = 0, maxItems = length)
 
   /**
     * This is a more general version of copyToArray - this also accepts a srcStart unlike copyToArray
@@ -414,7 +420,7 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def copySliceToArray(srcStart: Int, dest: Array[_], destStart: Int, maxItems: Int): dest.type = {
     requireBounds(destStart, 0, dest.length)
-    val toCopy = Math.min(maxItems, Math.min(size - srcStart, dest.length - destStart))
+    val toCopy = Math.min(maxItems, Math.min(length - srcStart, dest.length - destStart))
     if (toCopy > 0) {
       requireBounds(srcStart)
       val startIdx = start_+(srcStart)
@@ -429,7 +435,7 @@ class ArrayDeque[A] private[ArrayDeque](
   /**
     * Trims the capacity of this ArrayDeque's instance to be the current size
     */
-  def trimToSize(): Unit = resize(size - 1)
+  def trimToSize(): Unit = resize(length - 1)
 
   // Utils for common modular arithmetic:
   @inline private[this] def start_+(idx: Int) = (start + idx) & (array.length - 1)
@@ -447,11 +453,12 @@ class ArrayDeque[A] private[ArrayDeque](
   @inline private[this] def _set(idx: Int, elem: A) = array(start_+(idx)) = elem.asInstanceOf[AnyRef]
 
   private[this] def resize(len: Int) = if (isResizeNecessary(len)) {
-    val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = size)
-    reset(array = array2, start = 0, end = size)
+    val n = length
+    val array2 = copySliceToArray(srcStart = 0, dest = ArrayDeque.alloc(len), destStart = 0, maxItems = n)
+    reset(array = array2, start = 0, end = n)
   }
 
-  @inline private[this] def requireBounds(idx: Int, from: Int = 0, until: Int = size) =
+  @inline private[this] def requireBounds(idx: Int, from: Int = 0, until: Int = length) =
     if (idx < 0 || until <= idx) throw new IndexOutOfBoundsException(idx.toString)
 }
 
