@@ -1,10 +1,12 @@
 package strawman
-package collection.mutable
+package collection
+package mutable
 
-import scala.{Int, Option, None, inline, Serializable, Unit, Array, StringContext, Iterator, Boolean, Some, AnyRef, IndexOutOfBoundsException, SerialVersionUID}
-import scala.collection.{generic, mutable}
+import scala.{Int, Option, None, inline, Serializable, Unit, Array, StringContext, Boolean, Some, AnyRef, IndexOutOfBoundsException, SerialVersionUID}
 import scala.reflect.ClassTag
 import scala.Predef.{assert, require}
+
+import strawman.collection.{IndexedSeq, IndexedSeqOps, Iterator, StrictOptimizedSeqOps}
 
 import java.lang.Math
 import java.util.NoSuchElementException
@@ -39,13 +41,11 @@ class ArrayDeque[A] private[ArrayDeque](
     private[ArrayDeque] var array: Array[AnyRef],
     private[ArrayDeque] var start: Int,
     private[ArrayDeque] var end: Int
-) extends mutable.AbstractBuffer[A]
-    with mutable.Buffer[A]
-    with generic.GenericTraversableTemplate[A, ArrayDeque]
-    with mutable.BufferLike[A, ArrayDeque[A]]
-    with mutable.IndexedSeq[A]
-    with mutable.IndexedSeqOptimized[A, ArrayDeque[A]]
-    with mutable.Builder[A, ArrayDeque[A]]
+) extends Buffer[A]
+    with IndexedSeq[A]
+    with IndexedSeqOps[A, ArrayDeque, ArrayDeque[A]]
+    with IndexedOptimizedSeq[A]
+    with StrictOptimizedSeqOps[A, ArrayDeque, ArrayDeque[A]]
     with Serializable {
 
   reset(array, start, end)
@@ -71,13 +71,13 @@ class ArrayDeque[A] private[ArrayDeque](
     _set(idx, elem)
   }
 
-  override def +=(elem: A) = {
-    sizeHint(length + 1)
+  override def add(elem: A) = {
+    ensureSize(length + 1)
     appendAssumingCapacity(elem)
   }
 
-  override def +=:(elem: A) = {
-    sizeHint(length + 1)
+  override def prepend(elem: A) = {
+    ensureSize(length + 1)
     prependAssumingCapacity(elem)
   }
 
@@ -93,12 +93,14 @@ class ArrayDeque[A] private[ArrayDeque](
     this
   }
 
-  override def ++=:(elems: scala.collection.TraversableOnce[A]) = {
-    if (elems.nonEmpty) {
+  override def prependAll(elems: IterableOnce[A]) = {
+    val it = elems.iterator
+    if (it.nonEmpty) {
       val n = length
       // The following code resizes the current collection atmost once and traverses elems atmost twice
-      ArrayDeque.knownSize(elems) match {
+      elems.knownSize match {
         // Size is too expensive to compute AND we can traverse it only once - can't do much but retry with an IndexedSeq
+
         case srcLength if srcLength < 0 && !elems.isTraversableAgain => elems.toIndexedSeq ++=: this
 
         // We know for sure we need to resize to hold everything, might as well resize and memcopy upfront
@@ -111,11 +113,10 @@ class ArrayDeque[A] private[ArrayDeque](
 
         // Just fill up from (start - srcLength) to (start - 1) and move back start
         case _srcLength =>
-          val srcLength = if (_srcLength < 0) elems.size else _srcLength
-          sizeHint(srcLength + n)
+          val srcLength = if (_srcLength < 0) elems.length else _srcLength
+          ensureSize(srcLength + n)
           // Optimized version of `elems.zipWithIndex.foreach((elem, i) => _set(i - srcLength, elem))`
           var i = 0
-          val it = elems.toIterator
           while(it.hasNext) {
             _set(i - srcLength, it.next())
             i += 1
@@ -126,11 +127,11 @@ class ArrayDeque[A] private[ArrayDeque](
     this
   }
 
-  override def ++=(elems: scala.collection.TraversableOnce[A]) = {
-    if (elems.nonEmpty) {
-      ArrayDeque.knownSize(elems) match {
+  override def addAll(elems: IterableOnce[A]) = {
+    if (elems.iterator.nonEmpty) {
+      elems.knownSize match {
         case srcLength if srcLength >= 0 =>
-          sizeHint(srcLength + length)
+          ensureSize(srcLength + length)
           elems.foreach(appendAssumingCapacity)
         case _ => elems.foreach(+=)
       }
@@ -138,15 +139,15 @@ class ArrayDeque[A] private[ArrayDeque](
     this
   }
 
-  override def insertAll(idx: Int, elems: scala.collection.Traversable[A]) = {
+  override def insertAll(idx: Int, elems: IterableOnce[A]) = {
     requireBounds(idx)
     val n = length
     if (idx == 0) {
-      elems ++=: this
+      prependAll(elems)
     } else if (idx == n - 1) {
       this ++= elems
-    } else if (elems.nonEmpty) {
-      val srcLength = elems.size
+    } else if (elems.iterator.nonEmpty) {
+      val srcLength = elems.length
       val finalLength = srcLength + n
       // Either we resize right away or move prefix left or suffix right
       if (isResizeNecessary(finalLength)) {
@@ -162,7 +163,7 @@ class ArrayDeque[A] private[ArrayDeque](
           i -= 1
         }
         end = end_+(srcLength)
-        val it = elems.toIterator
+        val it = elems.iterator
         while(it.hasNext) {
           i += 1
           _set(i, it.next())
@@ -174,7 +175,7 @@ class ArrayDeque[A] private[ArrayDeque](
           i += 1
         }
         start = start_-(srcLength)
-        val it = elems.toIterator
+        val it = elems.iterator
         while(it.hasNext) {
           _set(i, it.next())
           i += 1
@@ -220,6 +221,12 @@ class ArrayDeque[A] private[ArrayDeque](
     val elem = this(idx)
     remove(idx, 1)
     elem
+  }
+
+  override def subtract(elem: A) = {
+    val idx = indexOf(elem)
+    if (idx != -1) remove(idx)
+    this
   }
 
   /**
@@ -282,7 +289,7 @@ class ArrayDeque[A] private[ArrayDeque](
     */
   def removeAll(): scala.collection.Seq[A] = {
     val elems = scala.collection.Seq.newBuilder[A]
-    elems.sizeHint(length)
+    elems.ensureSize(length)
     while(nonEmpty) {
       elems += removeHeadAssumingNonEmpty()
     }
@@ -329,7 +336,7 @@ class ArrayDeque[A] private[ArrayDeque](
     Iterator.tabulate(n)(i => this(n - i - 1))
   }
 
-  override def reverseMap[B, That](f: (A) => B)(implicit bf: generic.CanBuildFrom[ArrayDeque[A], B, That]) = reverse.map(f)
+  //override def reverseMap[B, That](f: (A) => B)(implicit bf: generic.CanBuildFrom[ArrayDeque[A], B, That]) = reverse.map(f)
 
   override def reverse = {
     val n = length
@@ -342,15 +349,27 @@ class ArrayDeque[A] private[ArrayDeque](
     new ArrayDeque(arr, start = 0, end = n)
   }
 
-  @inline override def sizeHint(hint: Int) = if (hint > length && isResizeNecessary(hint)) resize(hint + 1)
+  @inline override def ensureSize(hint: Int) = if (hint > length && isResizeNecessary(hint)) resize(hint + 1)
 
   override def length = end_-(start)
+
+  override def knowSize = length
 
   override def isEmpty = start == end
 
   override def nonEmpty = start != end
 
   override def clone() = new ArrayDeque(array.clone(), start = start, end = end)
+
+  override def view: ArrayDequeView[A] = new ArrayDequeView(this)
+
+  override def iterableFactory: SeqFactory[ArrayDeque] = ArrayDeque
+
+  protected[this] def fromSpecificIterable(coll: collection.Iterable[A]): ArrayDeque[A] =
+    fromIterable(coll)
+
+  protected[this] def newSpecificBuilder(): Builder[A, ArrayDeque[A]] =
+    ArrayBuffer.newBuilder()
 
   /**
     * Note: This does not actually resize the internal representation.
@@ -399,11 +418,7 @@ class ArrayDeque[A] private[ArrayDeque](
   override def copyToArray[B >: A](dest: Array[B], destStart: Int, len: Int) =
     copySliceToArray(srcStart = 0, dest = dest, destStart = destStart, maxItems = len)
 
-  override def companion = ArrayDeque
-
-  override def result() = this
-
-  override def stringPrefix = "ArrayDeque"
+  override def className = "ArrayDeque"
 
   override def toArray[B >: A: ClassTag] =
     copySliceToArray(srcStart = 0, dest = new Array[B](length), destStart = 0, maxItems = length)
@@ -462,11 +477,24 @@ class ArrayDeque[A] private[ArrayDeque](
     if (idx < 0 || until <= idx) throw new IndexOutOfBoundsException(idx.toString)
 }
 
-object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
-  implicit def canBuildFrom[A]: generic.CanBuildFrom[Coll, A, ArrayDeque[A]] =
-    ReusableCBF.asInstanceOf[GenericCanBuildFrom[A]]
+class ArrayDequeView[A](val parent: ArrayDeque[A]) extends IndexedView[A] {
 
-  override def newBuilder[A]: mutable.Builder[A, ArrayDeque[A]] = new ArrayDeque[A]()
+  override def apply(idx: Int) = parent(idx)
+
+  override def className = "ArrayDequeView"
+}
+
+object ArrayDeque extends StrictOptimizedSeqFactory[ArrayDeque] {
+   /** Avoid reallocation of buffer if length is known. */
+  def from[B](coll: collection.IterableOnce[B]): ArrayDeque[B] =
+    empty[B].addAll(coll) //TODO: Can be optimized based on coll.size?
+
+  def newBuilder[A](): Builder[A, ArrayDeque[A]] =
+    new GrowableBuilder[A, ArrayDeque[A]](empty) {
+      override def sizeHint(size: Int): Unit = elems.ensureSize(size)
+    }
+
+  def empty[A]: ArrayDeque[A] = new ArrayDeque[A]()
 
   final val DefaultInitialSize = 16
 
@@ -474,11 +502,6 @@ object ArrayDeque extends generic.SeqFactory[ArrayDeque] {
     * We try to not repeatedly resize arrays smaller than this
     */
   private[ArrayDeque] final val StableSize = 256
-
-  private[ArrayDeque] def knownSize[A](coll: scala.collection.TraversableOnce[A]) = {
-    //TODO: Remove this temporary util when we switch to strawman .sizeHintIfCheap is now .knownSize
-    if (coll.isInstanceOf[scala.List[_]] || coll.isInstanceOf[scala.Stream[_]] || coll.isInstanceOf[scala.Iterator[_]] || !coll.isTraversableAgain) -1 else coll.size
-  }
 
   /**
     * Allocates an array whose size is next power of 2 > $len

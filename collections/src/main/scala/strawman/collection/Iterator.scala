@@ -59,6 +59,8 @@ trait Iterator[+A] extends IterableOnce[A] { self =>
     *  @note     Reuse: $preservesIterator
     */
   def isEmpty: Boolean = !hasNext
+
+  def nonEmpty: Boolean = !isEmpty
   
   /** Wraps the value of `next()` in an option.
     *
