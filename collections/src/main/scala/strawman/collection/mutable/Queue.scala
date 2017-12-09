@@ -34,7 +34,7 @@ class Queue[A] extends ArrayDeque[A] {
     *  @param elems the traversable object.
     *  @return this
     */
-  def enqueueAll(elems: TraversableOnce[A]): this.type = this ++= elems
+  def enqueueAll(elems: strawman.collection.IterableOnce[A]): this.type = this ++= elems
 
   /**
     * Removes the from element from this queue and return it
@@ -49,7 +49,7 @@ class Queue[A] extends ArrayDeque[A] {
     *
     * @return
     */
-  def dequeueAll(): scala.collection.Seq[A] = removeAll()
+  def dequeueAll(): strawman.collection.Seq[A] = removeAll()
 
   /**
     * Returns and removes all elements from the end of this queue which satisfy the given predicate
@@ -57,5 +57,5 @@ class Queue[A] extends ArrayDeque[A] {
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def dequeueWhile(f: A => Boolean): scala.collection.Seq[A] = removeHeadWhile(f)
+  def dequeueWhile(f: A => Boolean): strawman.collection.Seq[A] = removeHeadWhile(f)
 }

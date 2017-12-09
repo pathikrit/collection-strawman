@@ -100,7 +100,6 @@ class ArrayDeque[A] private[ArrayDeque](
       // The following code resizes the current collection atmost once and traverses elems atmost twice
       elems.knownSize match {
         // Size is too expensive to compute AND we can traverse it only once - can't do much but retry with an IndexedSeq
-
         case srcLength if srcLength < 0 && !elems.isTraversableAgain => elems.toIndexedSeq ++=: this
 
         // We know for sure we need to resize to hold everything, might as well resize and memcopy upfront
@@ -128,13 +127,11 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def addAll(elems: IterableOnce[A]) = {
-    if (elems.iterator.nonEmpty) {
-      elems.knownSize match {
-        case srcLength if srcLength >= 0 =>
-          ensureSize(srcLength + length)
-          elems.foreach(appendAssumingCapacity)
-        case _ => elems.foreach(+=)
-      }
+    elems.knownSize match {
+      case srcLength if srcLength > 0 =>
+        ensureSize(srcLength + length)
+        elems.foreach(appendAssumingCapacity)
+      case _ => elems.foreach(+=)
     }
     this
   }
@@ -185,7 +182,6 @@ class ArrayDeque[A] private[ArrayDeque](
   }
 
   override def remove(idx: Int, count: Int) = {
-    require(count >= 0, s"removing negative number of elements: $count")
     if (count > 0) {
       requireBounds(idx)
       val n = length
@@ -214,6 +210,8 @@ class ArrayDeque[A] private[ArrayDeque](
         }
         end = end_-(removals)
       }
+    } else {
+      require(count == 0, s"removing negative number of elements: $count")
     }
   }
 
@@ -225,7 +223,7 @@ class ArrayDeque[A] private[ArrayDeque](
 
   override def subtract(elem: A) = {
     val idx = indexOf(elem)
-    if (idx != -1) remove(idx)
+    if (idx >= 0) remove(idx, 1) //TODO: SeqOps should be fluent API
     this
   }
 
@@ -287,9 +285,9 @@ class ArrayDeque[A] private[ArrayDeque](
     * Remove all elements from this collection and return the elements while emptying this data structure
     * @return
     */
-  def removeAll(): scala.collection.Seq[A] = {
-    val elems = scala.collection.Seq.newBuilder[A]
-    elems.ensureSize(length)
+  def removeAll(): strawman.collection.Seq[A] = {
+    val elems = strawman.collection.Seq.newBuilder[A]
+    elems.sizeHint(length)
     while(nonEmpty) {
       elems += removeHeadAssumingNonEmpty()
     }
@@ -302,8 +300,8 @@ class ArrayDeque[A] private[ArrayDeque](
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def removeHeadWhile(f: A => Boolean): scala.collection.Seq[A] = {
-    val elems = scala.collection.Seq.newBuilder[A]
+  def removeHeadWhile(f: A => Boolean): strawman.collection.Seq[A] = {
+    val elems = strawman.collection.Seq.newBuilder[A]
     while(headOption.exists(f)) {
       elems += removeHeadAssumingNonEmpty()
     }
@@ -316,8 +314,8 @@ class ArrayDeque[A] private[ArrayDeque](
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def removeLastWhile(f: A => Boolean): scala.collection.Seq[A] = {
-    val elems = scala.collection.Seq.newBuilder[A]
+  def removeLastWhile(f: A => Boolean): strawman.collection.Seq[A] = {
+    val elems = strawman.collection.Seq.newBuilder[A]
     while(lastOption.exists(f)) {
       elems += removeLastAssumingNonEmpty()
     }
@@ -349,11 +347,11 @@ class ArrayDeque[A] private[ArrayDeque](
     new ArrayDeque(arr, start = 0, end = n)
   }
 
-  @inline override def ensureSize(hint: Int) = if (hint > length && isResizeNecessary(hint)) resize(hint + 1)
+  @inline def ensureSize(hint: Int) = if (hint > length && isResizeNecessary(hint)) resize(hint + 1)
 
   override def length = end_-(start)
 
-  override def knowSize = length
+  override def knownSize = length
 
   override def isEmpty = start == end
 
@@ -369,7 +367,7 @@ class ArrayDeque[A] private[ArrayDeque](
     fromIterable(coll)
 
   protected[this] def newSpecificBuilder(): Builder[A, ArrayDeque[A]] =
-    ArrayBuffer.newBuilder()
+    ArrayDeque.newBuilder()
 
   /**
     * Note: This does not actually resize the internal representation.
@@ -491,7 +489,9 @@ object ArrayDeque extends StrictOptimizedSeqFactory[ArrayDeque] {
 
   def newBuilder[A](): Builder[A, ArrayDeque[A]] =
     new GrowableBuilder[A, ArrayDeque[A]](empty) {
-      override def sizeHint(size: Int): Unit = elems.ensureSize(size)
+      override def sizeHint(size: Int): Unit = {
+        //TODO: elems.ensureSize(size)
+      }
     }
 
   def empty[A]: ArrayDeque[A] = new ArrayDeque[A]()

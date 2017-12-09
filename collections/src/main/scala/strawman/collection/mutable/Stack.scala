@@ -35,7 +35,7 @@ class Stack[A] extends ArrayDeque[A] {
     *  @param elems the traversable object.
     *  @return the stack with the new elements on top.
     */
-  def pushAll(elems: TraversableOnce[A]): this.type = elems ++=: this
+  def pushAll(elems: strawman.collection.IterableOnce[A]): this.type = elems ++=: this
 
   /**
     * Removes the top element from this stack and return it
@@ -50,7 +50,7 @@ class Stack[A] extends ArrayDeque[A] {
     *
     * @return
     */
-  def popAll(): scala.collection.Seq[A] = removeAll()
+  def popAll(): strawman.collection.Seq[A] = removeAll()
 
   /**
     * Returns and removes all elements from the top of this stack which satisfy the given predicate
@@ -58,5 +58,5 @@ class Stack[A] extends ArrayDeque[A] {
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def popWhile(f: A => Boolean): scala.collection.Seq[A] = removeHeadWhile(f)
+  def popWhile(f: A => Boolean): strawman.collection.Seq[A] = removeHeadWhile(f)
 }
