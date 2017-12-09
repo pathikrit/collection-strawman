@@ -1,6 +1,7 @@
 # Collection-Strawman
 
 [![Join the chat at https://gitter.im/scala/collection-strawman](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/scala/collection-strawman?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Waffle.io board](https://badge.waffle.io/scala/collection-strawman.svg?label=ready&title=Ready+issues)](http://waffle.io/scala/collection-strawman)
 
 Prototype improvements for Scala collections.
 
@@ -20,13 +21,16 @@ are available. If you see something missing, please
 
 ## Use it in your project
 
+### Build setup
+
 Add the following dependency to your project:
 
 ~~~ scala
-libraryDependencies += "ch.epfl.scala" %% "collection-strawman" % "0.3.0"
+libraryDependencies += "ch.epfl.scala" %% "collection-strawman" % "0.7.0"
+libraryDependencies += "ch.epfl.scala" %% "collections-contrib" % "0.7.0" // optional
 ~~~
 
-The 0.3.0 version is compatible with Scala 2.13 and Dotty 0.2. Scala 2.12 is also supported
+The 0.6.0 version is compatible with Scala 2.13 and Dotty 0.5. Scala 2.12 is also supported
 but you might encounter type inference issues with it.
 
 We also automatically publish snapshots on Sonatype:
@@ -34,8 +38,66 @@ We also automatically publish snapshots on Sonatype:
 ~~~ scala
 resolvers += Resolver.sonatypeRepo("snapshots")
 
-libraryDependencies += "ch.epfl.scala" %% "collection-strawman" % "0.4.0-SNAPSHOT"
+libraryDependencies += "ch.epfl.scala" %% "collection-strawman" % "0.8.0-SNAPSHOT"
 ~~~
+
+The `collections-contrib` artifact provides additional operations on the collections (see the
+[Additional operations](#additional-operations) section).
+
+### API Documentation
+
+- [`collection-strawman`](https://static.javadoc.io/ch.epfl.scala/collection-strawman_2.12/0.6.0/index.html)
+- [`collections-contrib`](https://static.javadoc.io/ch.epfl.scala/collections-contrib_2.12/0.6.0/index.html)
+
+### Migrating from the standard collections to the strawman
+
+A tool is being developed to automatically migrate code that uses the standard
+collection to use the strawman.
+
+To use it, add the [scalafix](https://scalacenter.github.io/scalafix/) sbt plugin
+to your build, as explained in
+[its documentation](https://scalacenter.github.io/scalafix/#Installation).
+
+Then run the following sbt task on your project:
+
+~~~
+> scalafix github:scala/collection-strawman/v0
+~~~
+
+In essence, the migration tool changes the imports in your source code
+so that the strawman definitions are imported. It also rewrites
+expressions that use an API that is different in the strawman.
+
+The migration tool is not exhaustive and we will continue to improve
+it over time. If you encounter a use case that’s not supported, please
+report it as described in the
+[contributing documentation](CONTRIBUTING.md#migration-tool).
+
+### Additional Operations
+
+The `collections-contrib` artifact provides decorators enriching the collections with new operations. You can
+think of this artifact as an incubator: if we get evidence that these operations should be part of the core,
+we might eventually move them.
+
+The new operations are provided via an implicit enrichment. You need to add the following import to make them
+available:
+
+~~~ scala
+import strawman.collection.decorators._
+~~~
+
+The following operations are provided:
+
+- `Seq`
+    - `intersperse`
+- `Map`
+    - `zipByKey` / `join` / `zipByKeyWith`
+    - `mergeByKey` / `fullOuterJoin` / `mergeByKeyWith` / `leftOuterJoin` / `rightOuterJoin`
+
+The following collections are provided:
+
+- `MultiSet` (both mutable and immutable)
+- `SortedMultiSet` (both mutable and immutable)
 
 ## Roadmap
 
@@ -82,11 +144,13 @@ For more information, see the [CONTRIBUTING](CONTRIBUTING.md) file.
 - [x] `Range` / `NumericRange`
 - [x] `Vector`
 - [x] `HashMap`
+- [x] `mutable.LinkedHashMap`
 - [x] `TreeMap`
 - [ ] `IntMap` / `LongMap` (?)
 - [x] `ListMap`
 - [ ] `MultiMap`
 - [x] `HashSet`
+- [x] `mutable.LinkedHashSet`
 - [x] `ListSet`
 - [x] `TreeSet`
 - [ ] `EqSet`
@@ -116,7 +180,7 @@ For more information, see the [CONTRIBUTING](CONTRIBUTING.md) file.
 - [x] `indices`
 - [x] `isDefinedAt`
 - [x] `isEmpty` / `nonEmpty`
-- [x] `keysIteratorFrom`
+- [x] `iteratorFrom` / `keysIteratorFrom` / `valuesIteratorFrom`
 - [x] `last` / `lastOption`
 - [x] `lastKey`
 - [x] `max` / `maxBy`
@@ -133,14 +197,15 @@ For more information, see the [CONTRIBUTING](CONTRIBUTING.md) file.
 ### Transformations to collections having the same element type
 
 - [x] `diff`
+- [x] `distinct` / `distinctBy`
 - [x] `drop` / `dropRight` / `dropWhile`
 - [x] `empty`
-- [x] `filter` / `filterNot`
+- [x] `filter` / `filterNot` / `filterKeys`
 - [x] `groupBy`
 - [x] `init`
 - [x] `intersect`
 - [x] `partition`
-- [x] `range`
+- [x] `range` / `rangeTo`
 - [x] `rangeImpl`
 - [x] `sorted` / `sortBy` / `sortWith`
 - [x] `slice`
@@ -150,6 +215,7 @@ For more information, see the [CONTRIBUTING](CONTRIBUTING.md) file.
 - [x] `tail`
 - [x] `take` / `takeRight` / `takeWhile`
 - [x] `updated`
+- [x] `withDefault` / `withDefaultValue`
 
 ### Transformations to collections that can have a different element type
 
@@ -161,14 +227,16 @@ For more information, see the [CONTRIBUTING](CONTRIBUTING.md) file.
 - [x] `++:` / `prependAll`
 - [x] `flatMap`
 - [x] `grouped`
-- [x] `map`
+- [x] `keys` / `keySet` / `keysIterator`
+- [x] `map` / `mapValues`
 - [x] `merged`
 - [x] `padTo`
 - [x] `permutations`
 - [x] `scan` / `scanLeft` / `scanRight`
 - [x] `sliding`
 - [x] `unzip`
-- [x] `zip` / `zipWithIndex`
+- [x] `values` / `valuesIterator`
+- [x] `zip` / `zipWithIndex` / `lazyZip`
 
 ### In-place mutating operations
 
