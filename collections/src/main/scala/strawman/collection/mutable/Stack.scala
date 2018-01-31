@@ -12,6 +12,12 @@ import scala._
   *  @since   2.13
   */
 class Stack[A] extends ArrayDeque[A] {
+  /**
+    * Returns the top (front) element of this stack (without removing it) and returns it (None if empty)
+    *
+    * @return
+    */
+  def peek: Option[A] = headOption
 
   /**
     * Add elements to the top of this stack

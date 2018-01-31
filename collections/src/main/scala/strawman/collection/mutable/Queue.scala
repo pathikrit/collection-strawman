@@ -13,6 +13,13 @@ import scala._
 class Queue[A] extends ArrayDeque[A] {
 
   /**
+    * Returns the top (front) element of this queue (without removing it) and returns it (None if empty)
+    *
+    * @return
+    */
+  def peek: Option[A] = headOption
+
+  /**
     * Add elements to the end of this queue
     *
     * @param elem

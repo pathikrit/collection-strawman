@@ -314,20 +314,13 @@ class ArrayDeque[A] private[ArrayDeque](
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def removeLastWhile(f: A => Boolean): strawman.collection.Seq[A] = {
+  def removeRightWhile(f: A => Boolean): strawman.collection.Seq[A] = {
     val elems = strawman.collection.Seq.newBuilder[A]
     while(lastOption.exists(f)) {
       elems += removeLastAssumingNonEmpty()
     }
     elems.result()
   }
-
-  /**
-    * Returns the top (front) element of this queue (without removing it) and returns it (None if empty)
-    *
-    * @return
-    */
-  def peek: Option[A] = headOption
 
   override def reverseIterator = {
     val n = length
