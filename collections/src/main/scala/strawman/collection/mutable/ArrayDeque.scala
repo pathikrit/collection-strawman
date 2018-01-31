@@ -322,13 +322,6 @@ class ArrayDeque[A] private[ArrayDeque](
     elems.result()
   }
 
-  override def reverseIterator = {
-    val n = length
-    Iterator.tabulate(n)(i => this(n - i - 1))
-  }
-
-  //override def reverseMap[B, That](f: (A) => B)(implicit bf: generic.CanBuildFrom[ArrayDeque[A], B, That]) = reverse.map(f)
-
   override def reverse = {
     val n = length
     val arr = ArrayDeque.alloc(n)
