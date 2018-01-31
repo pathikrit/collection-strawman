@@ -58,5 +58,5 @@ class Stack[A] extends ArrayDeque[A] {
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def popWhile(f: A => Boolean): strawman.collection.Seq[A] = removeHeadWhile(f)
+  def popWhile(f: A => Boolean): strawman.collection.Seq[A] = removeWhile(f)
 }

@@ -57,5 +57,5 @@ class Queue[A] extends ArrayDeque[A] {
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def dequeueWhile(f: A => Boolean): strawman.collection.Seq[A] = removeHeadWhile(f)
+  def dequeueWhile(f: A => Boolean): strawman.collection.Seq[A] = removeWhile(f)
 }

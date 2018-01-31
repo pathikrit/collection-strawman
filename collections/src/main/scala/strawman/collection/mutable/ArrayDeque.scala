@@ -300,7 +300,7 @@ class ArrayDeque[A] private[ArrayDeque](
     *  @param f   the predicate used for choosing elements
     *  @return
     */
-  def removeHeadWhile(f: A => Boolean): strawman.collection.Seq[A] = {
+  def removeWhile(f: A => Boolean): strawman.collection.Seq[A] = {
     val elems = strawman.collection.Seq.newBuilder[A]
     while(headOption.exists(f)) {
       elems += removeHeadAssumingNonEmpty()
