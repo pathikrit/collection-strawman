@@ -1,14 +1,14 @@
 package strawman.collection
 
 import scala.{Any, AnyRef, Array, Boolean, Equals, IndexOutOfBoundsException, Int, NoSuchElementException, Ordering, Unit, math, throws, `inline`, deprecated, PartialFunction}
-import scala.Predef.{identity, intWrapper}
+import scala.Predef.{identity, intWrapper, $conforms}
 import java.lang.{Object, String}
 
 import strawman.collection.immutable.Range
 
-import scala.annotation.tailrec
 import scala.annotation.unchecked.uncheckedVariance
 import scala.util.hashing.MurmurHash3
+import Searching.{SearchResult, Found, InsertionPoint}
 
 /** Base trait for sequence collections
   *
@@ -186,6 +186,8 @@ trait SeqOps[+A, +CC[_], +C] extends Any
   // overrides of this method
   @`inline` final override def concat[B >: A](suffix: Iterable[B]): CC[B] = appendedAll(suffix)
 
+  final override def size: Int = length
+
   /** Selects all the elements of this $coll ignoring the duplicates.
     *
     * @return a new $coll consisting of all the elements of this $coll without duplicates.
@@ -274,7 +276,35 @@ trait SeqOps[+A, +CC[_], +C] extends Any
    *          that the resulting collection has a length of at least `len`.
    */
   def padTo[B >: A](len: Int, elem: B): CC[B] = fromIterable(View.PadTo(toIterable, len, elem))
-  
+
+  /** Computes length of longest segment whose elements all satisfy some predicate.
+    *
+    *  $mayNotTerminateInf
+    *
+    *  @param   p     the predicate used to test elements.
+    *  @param   from  the index where the search starts.
+    *  @return  the length of the longest segment of this $coll starting from index `from`
+    *           such that every element of the segment satisfies the predicate `p`.
+    */
+  def segmentLength(p: A => Boolean, from: Int = 0): Int = {
+    var i = 0
+    val it = iterator().drop(from)
+    while (it.hasNext && p(it.next()))
+      i += 1
+    i
+  }
+
+  /** Returns the length of the longest prefix whose elements all satisfy some predicate.
+    *
+    *  $mayNotTerminateInf
+    *
+    *  @param   p     the predicate used to test elements.
+    *  @return  the length of the longest prefix of this $coll
+    *           such that every element of the segment satisfies the predicate `p`.
+    */
+  @deprecated("Use segmentLength instead of prefixLength", "2.13.0")
+  @`inline` final def prefixLength(p: A => Boolean): Int = segmentLength(p, 0)
+
   /** Finds index of the first element satisfying some predicate after or at some start index.
     *
     *  $mayNotTerminateInf
@@ -327,10 +357,10 @@ trait SeqOps[+A, +CC[_], +C] extends Any
    *           match the elements of sequence `that`, or `-1` of no such subsequence exists.
    */
   // TODO Should be implemented in a way that preserves laziness
-  def indexOfSlice[B >: A](that: Seq[B], from: Int = 0): Int =
-    if (this.knownSize >= 0 && that.knownSize >= 0) {
-      val l = length
-      val tl = that.length
+  def indexOfSlice[B >: A](that: Seq[B], from: Int = 0): Int = {
+    val l = knownSize
+    val tl = that.knownSize
+    if (l >= 0 && tl >= 0) {
       val clippedFrom = math.max(0, from)
       if (from > l) -1
       else if (tl < 1) clippedFrom
@@ -349,6 +379,7 @@ trait SeqOps[+A, +CC[_], +C] extends Any
       }
       -1
     }
+  }
 
   /** Finds last index before or at a given end index where this $coll contains a given sequence as a slice.
    *  @param  that    the sequence to test
@@ -637,6 +668,9 @@ trait SeqOps[+A, +CC[_], +C] extends Any
     }
   }
 
+  override def isEmpty: Boolean = lengthCompare(0) == 0
+  override def nonEmpty: Boolean = lengthCompare(0) != 0
+
   /** Are the elements of this collection the same (and in the same order)
     * as those of `that`?
     */
@@ -709,10 +743,83 @@ trait SeqOps[+A, +CC[_], +C] extends Any
     b.result()
   }
 
+  /** Produces a new $coll where a slice of elements in this $coll is replaced by another sequence.
+    *
+    * Patching at negative indices is the same as patching starting at 0.
+    * Patching at indices at or larger than the length of the original $coll appends the patch to the end.
+    * If more values are replaced than actually exist, the excess is ignored.
+    *
+    *  @param  from     the index of the first replaced element
+    *  @param  other    the replacement sequence
+    *  @param  replaced the number of elements to drop in the original $coll
+    *  @tparam B        the element type of the returned $coll.
+    *  @return          a new $coll consisting of all elements of this $coll
+    *                   except that `replaced` elements starting from `from` are replaced
+    *                   by all the elements of `other`.
+    */
+  def patch[B >: A](from: Int, other: IterableOnce[B], replaced: Int): CC[B] =
+    fromIterable(new View.Patched(toIterable, from, other, replaced))
+
   private[this] def occCounts[B](sq: Seq[B]): mutable.HashMap[B, Int] = {
     val occ = new mutable.HashMap[B, Int] { override def default(k: B) = 0 }
     for (y <- sq) occ(y) += 1
     occ
+  }
+
+  /** Search this sorted sequence for a specific element. If the sequence is an
+    * `IndexedSeq`, a binary search is used. Otherwise, a linear search is used.
+    *
+    * The sequence should be sorted with the same `Ordering` before calling; otherwise,
+    * the results are undefined.
+    *
+    * @see [[scala.collection.IndexedSeq]]
+    * @see [[scala.math.Ordering]]
+    * @see [[scala.collection.SeqOps]], method `sorted`
+    *
+    * @param elem the element to find.
+    * @param ord  the ordering to be used to compare elements.
+    *
+    * @return a `Found` value containing the index corresponding to the element in the
+    *         sequence, or the `InsertionPoint` where the element would be inserted if
+    *         the element is not in the sequence.
+    */
+  def search[B >: A](elem: B)(implicit ord: Ordering[B]): SearchResult =
+    linearSearch(view, elem, 0)(ord)
+
+  /** Search within an interval in this sorted sequence for a specific element. If this
+    * sequence is an `IndexedSeq`, a binary search is used. Otherwise, a linear search
+    * is used.
+    *
+    * The sequence should be sorted with the same `Ordering` before calling; otherwise,
+    * the results are undefined.
+    *
+    * @see [[scala.collection.IndexedSeq]]
+    * @see [[scala.math.Ordering]]
+    * @see [[scala.collection.SeqOps]], method `sorted`
+    *
+    * @param elem the element to find.
+    * @param from the index where the search starts.
+    * @param to   the index following where the search ends.
+    * @param ord  the ordering to be used to compare elements.
+    *
+    * @return a `Found` value containing the index corresponding to the element in the
+    *         sequence, or the `InsertionPoint` where the element would be inserted if
+    *         the element is not in the sequence.
+    */
+  def search[B >: A](elem: B, from: Int, to: Int) (implicit ord: Ordering[B]): SearchResult =
+    linearSearch(view.slice(from, to), elem, from)(ord)
+
+  private[this] def linearSearch[B >: A](c: View[A], elem: B, offset: Int)
+                                        (implicit ord: Ordering[B]): SearchResult = {
+    var idx = offset
+    val it = c.iterator()
+    while (it.hasNext) {
+      val cur = it.next()
+      if (ord.equiv(elem, cur)) return Found(idx)
+      else if (ord.lt(elem, cur)) return InsertionPoint(idx)
+      idx += 1
+    }
+    InsertionPoint(idx)
   }
 }
 

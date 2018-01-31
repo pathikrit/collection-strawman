@@ -110,8 +110,6 @@ final class TreeSet[A] private (tree: RB.Tree[A, Unit])(implicit val ordering: O
 
   def iteratorFrom(start: A): Iterator[A] = RB.keysIterator(tree, Some(start))
 
-  def unordered: Set[A] = this
-
   /** Checks if this set contains element `elem`.
     *
     *  @param  elem    the element to check for membership.
@@ -162,7 +160,7 @@ object TreeSet extends SortedIterableFactory[TreeSet] {
 
   def newBuilder[A : Ordering](): Builder[A, TreeSet[A]] =
     new ImmutableBuilder[A, TreeSet[A]](empty) {
-      def add(elem: A): this.type = { elems = elems + elem; this }
+      def addOne(elem: A): this.type = { elems = elems + elem; this }
     }
 
 }

@@ -3,13 +3,17 @@ import org.scalajs.sbtplugin.cross.CrossProject
 
 // Convenient setting that allows writing `set scalaVersion := dotty.value` in sbt shell to switch from Scala to Dotty
 val dotty = settingKey[String]("dotty version")
-dotty in ThisBuild := "0.5.0-RC1"
+dotty in ThisBuild := "0.6.0-RC1"
+
+val collectionsScalaVersionSettings = Seq(
+  scalaVersion := "2.13.0-M2",
+  crossScalaVersions := scalaVersion.value :: "2.12.4" :: dotty.value :: Nil
+)
 
 val commonSettings = Seq(
   organization := "ch.epfl.scala",
-  version := "0.8.0-SNAPSHOT",
-  scalaVersion := "2.13.0-M2",
-  crossScalaVersions := scalaVersion.value :: "2.12.4" :: dotty.value :: Nil,
+  version := "0.10.0-SNAPSHOT",
+  scalaVersion := "2.12.4",
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:higherKinds"/*, "-opt:l:classpath"*/),
   scalacOptions ++= {
     if (!isDotty.value)
@@ -75,6 +79,7 @@ def crossProj(id: String, base: File) =
 val collections =
   crossProj("collections", file("collections"))
     .settings(
+      collectionsScalaVersionSettings,
       name := "collection-strawman",
       scalacOptions += "-Yno-imports"
     )
@@ -86,6 +91,7 @@ val `collections-contrib` =
   crossProj("collections-contrib", file("collections-contrib"))
     .dependsOn(collections)
     .settings(
+      collectionsScalaVersionSettings,
       name := "collections-contrib"
     )
 
@@ -112,9 +118,8 @@ val `collection-strawman` = project.in(file("."))
 val junit = project.in(file("test") / "junit")
   .dependsOn(collectionsJVM)
   .settings(commonSettings ++ disablePublishing)
-   // Dotty 0.3.0-RC1 crashes when trying to compile this project
-  .settings(disableDotty)
   .settings(
+    collectionsScalaVersionSettings,
     fork in Test := true,
     javaOptions in Test += "-Xss1M",
     libraryDependencies ++= Seq(
@@ -132,6 +137,7 @@ val scalacheck = project.in(file("test") / "scalacheck")
    // Dotty 0.3.0-RC1 crashes when trying to compile this project
   .settings(disableDotty)
   .settings(
+    collectionsScalaVersionSettings,
     fork in Test := true,
     javaOptions in Test += "-Xss1M",
     libraryDependencies ++= Seq(

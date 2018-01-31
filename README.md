@@ -26,11 +26,11 @@ are available. If you see something missing, please
 Add the following dependency to your project:
 
 ~~~ scala
-libraryDependencies += "ch.epfl.scala" %% "collection-strawman" % "0.7.0"
-libraryDependencies += "ch.epfl.scala" %% "collections-contrib" % "0.7.0" // optional
+libraryDependencies += "ch.epfl.scala" %% "collection-strawman" % "0.8.0"
+libraryDependencies += "ch.epfl.scala" %% "collections-contrib" % "0.8.0" // optional
 ~~~
 
-The 0.6.0 version is compatible with Scala 2.13 and Dotty 0.5. Scala 2.12 is also supported
+The 0.8.0 version is compatible with Scala 2.13 and Dotty 0.6. Scala 2.12 is also supported
 but you might encounter type inference issues with it.
 
 We also automatically publish snapshots on Sonatype:
@@ -38,7 +38,7 @@ We also automatically publish snapshots on Sonatype:
 ~~~ scala
 resolvers += Resolver.sonatypeRepo("snapshots")
 
-libraryDependencies += "ch.epfl.scala" %% "collection-strawman" % "0.8.0-SNAPSHOT"
+libraryDependencies += "ch.epfl.scala" %% "collection-strawman" % "0.9.0-SNAPSHOT"
 ~~~
 
 The `collections-contrib` artifact provides additional operations on the collections (see the
@@ -46,8 +46,8 @@ The `collections-contrib` artifact provides additional operations on the collect
 
 ### API Documentation
 
-- [`collection-strawman`](https://static.javadoc.io/ch.epfl.scala/collection-strawman_2.12/0.6.0/index.html)
-- [`collections-contrib`](https://static.javadoc.io/ch.epfl.scala/collections-contrib_2.12/0.6.0/index.html)
+- [`collection-strawman`](https://static.javadoc.io/ch.epfl.scala/collection-strawman_2.12/0.8.0/index.html)
+- [`collections-contrib`](https://static.javadoc.io/ch.epfl.scala/collections-contrib_2.12/0.8.0/index.html)
 
 ### Migrating from the standard collections to the strawman
 
@@ -58,20 +58,34 @@ To use it, add the [scalafix](https://scalacenter.github.io/scalafix/) sbt plugi
 to your build, as explained in
 [its documentation](https://scalacenter.github.io/scalafix/#Installation).
 
-Then run the following sbt task on your project:
+Two situations are supported: (1) migrating a 2.12 code base to a 2.12 code base that
+uses the collection strawman as a library (instead of the standard collections), and
+(2) migrating a 2.12 code base to 2.13 code base.
+
+The migration tool is not exhaustive and we will continue to improve
+it over time. If you encounter a use case that’s not supported, please
+report it as described in the
+[contributing documentation](CONTRIBUTING.md#migration-tool).
+
+#### Migrating a 2.12 code base to a 2.12 code base that uses the collection strawman as a library
+
+Run the following sbt task on your project:
 
 ~~~
-> scalafix github:scala/collection-strawman/v0
+> scalafix https://github.com/scala/collection-strawman/raw/master/scalafix/2.12/rules/src/main/scala/fix/Collectionstrawman_v0.scala
 ~~~
 
 In essence, the migration tool changes the imports in your source code
 so that the strawman definitions are imported. It also rewrites
 expressions that use an API that is different in the strawman.
 
-The migration tool is not exhaustive and we will continue to improve
-it over time. If you encounter a use case that’s not supported, please
-report it as described in the
-[contributing documentation](CONTRIBUTING.md#migration-tool).
+#### Migrating a 2.12 code base to 2.13 code base
+
+Run the following sbt task on your project:
+
+~~~
+> scalafix https://github.com/scala/collection-strawman/raw/master/scalafix/2.13/rules/src/main/scala/fix/Collectionstrawman_v0.scala
+~~~
 
 ### Additional Operations
 

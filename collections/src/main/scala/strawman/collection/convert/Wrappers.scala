@@ -10,13 +10,14 @@ package strawman
 package collection
 package convert
 
-import scala.{Some, None, Serializable, AnyRef, Boolean, Option, Int, ClassCastException, SerialVersionUID, Any, Unit}
+import scala.{Any, AnyRef, Boolean, ClassCastException, Int, None, Option, SerialVersionUID, Serializable, Some, Unit}
 import scala.Predef.String
-import java.{ lang => jl, util => ju }, java.util.{ concurrent => juc }
+import java.{lang => jl, util => ju}
+import java.util.{concurrent => juc}
 import java.util.function.Predicate
-import java.lang.{IllegalStateException, UnsupportedOperationException, Object}
-import WrapAsScala._
-import WrapAsJava._
+import java.lang.{IllegalStateException, Object, UnsupportedOperationException}
+
+import strawman.collection.JavaConverters._
 
 /** Adapters for Java/Scala collections API. */
 private[collection] trait Wrappers {
@@ -52,14 +53,14 @@ private[collection] trait Wrappers {
   case class IterableWrapper[A](underlying: Iterable[A]) extends ju.AbstractCollection[A] with IterableWrapperTrait[A] { }
 
   case class JIterableWrapper[A](underlying: jl.Iterable[A]) extends AbstractIterable[A] with Iterable[A] {
-    def iterator() = underlying.iterator
+    def iterator() = underlying.asScala.iterator()
     protected[this] def fromSpecificIterable(coll: Iterable[A]) = mutable.ArrayBuffer.from(coll)
     def iterableFactory = mutable.ArrayBuffer
     protected[this] def newSpecificBuilder() = mutable.ArrayBuffer.newBuilder()
   }
 
   case class JCollectionWrapper[A](underlying: ju.Collection[A]) extends AbstractIterable[A] with Iterable[A] {
-    def iterator() = underlying.iterator
+    def iterator() = underlying.asScala.iterator()
     override def size = underlying.size
     override def isEmpty = underlying.isEmpty
     protected[this] def fromSpecificIterable(coll: Iterable[A]) = mutable.ArrayBuffer.from(coll)
@@ -90,11 +91,11 @@ private[collection] trait Wrappers {
   case class JListWrapper[A](underlying: ju.List[A]) extends mutable.AbstractBuffer[A] with SeqOps[A, mutable.Buffer, mutable.Buffer[A]] {
     def length = underlying.size
     override def isEmpty = underlying.isEmpty
-    override def iterator(): Iterator[A] = underlying.iterator
+    override def iterator(): Iterator[A] = underlying.asScala.iterator()
     def apply(i: Int) = underlying.get(i)
     def update(i: Int, elem: A) = underlying.set(i, elem)
     def prepend(elem: A) = { underlying.subList(0, 0) add elem; this }
-    def add(elem: A): this.type = { underlying add elem; this }
+    def addOne(elem: A): this.type = { underlying add elem; this }
     def insert(idx: Int,elem: A): Unit = underlying.subList(0, idx).add(elem)
     def insertAll(i: Int, elems: IterableOnce[A]) = {
       val ins = underlying.subList(0, i)
@@ -108,11 +109,11 @@ private[collection] trait Wrappers {
 
     def flatMapInPlace(f: A => strawman.collection.IterableOnce[A]): this.type = {
       val it = underlying.listIterator()
-      while(it.hasNext()) {
+      while(it.hasNext) {
         val e = it.next()
         it.remove()
         val es = f(e)
-        es.foreach(it.add)
+        es.iterator().foreach(it.add)
       }
       this
     }
@@ -135,7 +136,7 @@ private[collection] trait Wrappers {
     protected[this] def fromSpecificIterable(coll: Iterable[A]) = mutable.ArrayBuffer.from(coll)
     def iterableFactory = mutable.ArrayBuffer
     protected[this] def newSpecificBuilder() = mutable.ArrayBuffer.newBuilder()
-    def subtract(elem: A): this.type = { underlying.remove(elem.asInstanceOf[AnyRef]); this }
+    def subtractOne(elem: A): this.type = { underlying.remove(elem.asInstanceOf[AnyRef]); this }
   }
 
   @SerialVersionUID(1L)
@@ -183,12 +184,12 @@ private[collection] trait Wrappers {
 
     override def size = underlying.size
 
-    def iterator() = underlying.iterator
+    def iterator() = underlying.asScala.iterator()
 
     def contains(elem: A): Boolean = underlying.contains(elem)
 
-    def add(elem: A): this.type = { underlying add elem; this }
-    def subtract(elem: A): this.type = { underlying remove elem; this }
+    def addOne(elem: A): this.type = { underlying add elem; this }
+    def subtractOne(elem: A): this.type = { underlying remove elem; this }
 
     //TODO Should Set.remove return the canonical element? There is no efficient way to support this for wrapped Java Sets
     override def remove(elem: A): Option[A] = if(underlying remove elem) Some(elem) else None
@@ -306,8 +307,8 @@ private[collection] trait Wrappers {
         None
     }
 
-    def add(kv: (K, V)): this.type = { underlying.put(kv._1, kv._2); this }
-    def subtract(key: K): this.type = { underlying remove key; this }
+    def addOne(kv: (K, V)): this.type = { underlying.put(kv._1, kv._2); this }
+    def subtractOne(key: K): this.type = { underlying remove key; this }
 
     override def put(k: K, v: V): Option[V] = Option(underlying.put(k, v))
 
@@ -415,8 +416,8 @@ private[collection] trait Wrappers {
 
     def get(k: A) = Option(underlying get k)
 
-    def add(kv: (A, B)): this.type = { underlying.put(kv._1, kv._2); this }
-    def subtract(key: A): this.type = { underlying remove key; this }
+    def addOne(kv: (A, B)): this.type = { underlying.put(kv._1, kv._2); this }
+    def subtractOne(key: A): this.type = { underlying remove key; this }
 
     override def put(k: A, v: B): Option[B] = Option(underlying.put(k, v))
 
@@ -426,7 +427,7 @@ private[collection] trait Wrappers {
 
     def iterator() = enumerationAsScalaIterator(underlying.keys) map (k => (k, underlying get k))
 
-    override def clear() = underlying.clear()
+    def clear() = iterator().foreach(entry => underlying.remove(entry._1))
 
     protected[this] def fromSpecificIterable(coll: Iterable[(A, B)]) = mutable.HashMap.from(coll)
     protected[this] def newSpecificBuilder() = mutable.HashMap.newBuilder()
@@ -445,8 +446,8 @@ private[collection] trait Wrappers {
       if (v != null) Some(v.asInstanceOf[String]) else None
     }
 
-    def add(kv: (String, String)): this.type = { underlying.put(kv._1, kv._2); this }
-    def subtract(key: String): this.type = { underlying remove key; this }
+    def addOne(kv: (String, String)): this.type = { underlying.put(kv._1, kv._2); this }
+    def subtractOne(key: String): this.type = { underlying remove key; this }
 
     override def put(k: String, v: String): Option[String] = {
       val r = underlying.put(k, v)

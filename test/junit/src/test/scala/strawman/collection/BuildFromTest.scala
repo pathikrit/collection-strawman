@@ -112,7 +112,7 @@ class BuildFromTest {
     val left = bfLeft.newBuilder(coll)
     val right = bfRight.newBuilder(coll)
     for (a <- coll)
-      f(a).fold(left.add, right.add)
+      f(a).fold(left.addOne, right.addOne)
     (left.result(), right.result())
   }
 
@@ -148,4 +148,7 @@ class BuildFromTest {
     val xs9: immutable.TreeMap[String, Int] = xs7
     val xs10: immutable.TreeMap[Int, Boolean] = xs8
   }
+
+  implicitly[BuildFrom[String, Char, String]]
+  implicitly[BuildFrom[Array[Int], Char, Array[Char]]]
 }

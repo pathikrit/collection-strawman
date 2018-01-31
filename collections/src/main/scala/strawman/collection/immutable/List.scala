@@ -71,7 +71,7 @@ import scala.{Any, AnyRef, Boolean, Function1, IndexOutOfBoundsException, Int, N
   *  @define mayNotTerminateInf
   *  @define willNotTerminateInf
   */
-sealed trait List[+A]
+sealed abstract class List[+A]
   extends LinearSeq[A]
     with LinearSeqOps[A, List, List[A]]
     with StrictOptimizedSeqOps[A, List, List[A]]
@@ -326,7 +326,7 @@ sealed trait List[+A]
     }
   }
 
-  override def reverse: List[A] = {
+  final override def reverse: List[A] = {
     var result: List[A] = Nil
     var these = this
     while (!these.isEmpty) {
@@ -336,8 +336,15 @@ sealed trait List[+A]
     result
   }
 
-  override def foldRight[B](z: B)(op: (A, B) => B): B =
-    reverse.foldLeft(z)((right, left) => op(left, right))
+  final override def foldRight[B](z: B)(op: (A, B) => B): B = {
+    var acc = z
+    var these: List[A] = reverse
+    while (!these.isEmpty) {
+      acc = op(these.head, acc)
+      these = these.tail
+    }
+    acc
+  }
 
   // Create a proxy for Java serialization that allows us to avoid mutation
   // during deserialization.  This is the Serialization Proxy Pattern.
@@ -398,6 +405,9 @@ sealed trait List[+A]
     }
     loop(null, null, this, this)
   }
+
+  final override def toList: List[A] = this
+
 }
 
 @SerialVersionUID(6493291385232469459L) // value computed for strawman 0.6.0, scala 2.13.0-M2
@@ -427,6 +437,9 @@ case object Nil extends List[Nothing] {
   * @define Coll `List`
   */
 object List extends StrictOptimizedSeqFactory[List] {
+
+  // override for now so we can compile in stdlib without https://github.com/scala/scala/pull/6229
+  override def apply[A](elems: A*): List[A] = super.apply[A](elems: _*)
 
   def from[B](coll: collection.IterableOnce[B]): List[B] = coll match {
     case coll: List[B] => coll

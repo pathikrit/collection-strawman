@@ -20,7 +20,7 @@ import java.lang.String
   */
 trait Iterable[+A] extends IterableOnce[A] with IterableOps[A, Iterable, Iterable[A]] with Traversable[A] {
 
-  /** The collection itself */
+  // The collection itself
   final def toIterable: this.type = this
 
   //TODO scalac generates an override for this in AbstractMap; Making it final leads to a VerifyError
@@ -74,10 +74,23 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
     */
   protected[this] def coll: C
 
+  /**
+    * Defines how to turn a given `Iterable[A]` into a collection of type `C`.
+    *
+    * This process can be done in a strict way or a non-strict way (ie. without evaluating
+    * the elements of the resulting collections). In other words, this methods defines
+    * the evaluation model of the collection.
+    */
   protected[this] def fromSpecificIterable(coll: Iterable[A]): C
 
-  protected[this] def fromIterable[E](it: Iterable[E]): CC[E] = iterableFactory.from(it)
+  /** Similar to `fromSpecificIterable`, but for a (possibly) different type of element.
+    * Note that the return type is know `CC[E]`.
+    */
+  @`inline` final protected[this] def fromIterable[E](it: Iterable[E]): CC[E] = iterableFactory.from(it)
 
+  /**
+    * @return The companion object of this ${coll}, providing various factory methods.
+    */
   def iterableFactory: IterableFactoryLike[CC]
 
   /**
@@ -85,8 +98,8 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
     *
     * Note that in the case of lazy collections (e.g. [[View]] or [[immutable.LazyList]]),
     * it is possible to implement this method but the resulting `Builder` will break laziness.
-    * As a consequence, operations should preferably be implemented on top of views rather
-    * than builders.
+    * As a consequence, operations should preferably be implemented with `fromSpecificIterable`
+    * instead of this method.
     */
   protected[this] def newSpecificBuilder(): Builder[A, C]
 
@@ -140,10 +153,41 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
     */
   def find(p: A => Boolean): Option[A] = iterator().find(p)
 
-  /** Fold left */
+  /** Applies a binary operator to a start value and all elements of this $coll,
+    *  going left to right.
+    *
+    *  $willNotTerminateInf
+    *  $orderDependentFold
+    *
+    *  @param   z    the start value.
+    *  @param   op   the binary operator.
+    *  @tparam  B    the result type of the binary operator.
+    *  @return  the result of inserting `op` between consecutive elements of this $coll,
+    *           going left to right with the start value `z` on the left:
+    *           {{{
+    *             op(...op(z, x_1), x_2, ..., x_n)
+    *           }}}
+    *           where `x,,1,,, ..., x,,n,,` are the elements of this $coll.
+    *           Returns `z` if this $coll is empty.
+    */
   def foldLeft[B](z: B)(op: (B, A) => B): B = iterator().foldLeft(z)(op)
 
-  /** Fold right */
+  /** Applies a binary operator to all elements of this $coll and a start value,
+    *  going right to left.
+    *
+    *  $willNotTerminateInf
+    *  $orderDependentFold
+    *  @param   z    the start value.
+    *  @param   op   the binary operator.
+    *  @tparam  B    the result type of the binary operator.
+    *  @return  the result of inserting `op` between consecutive elements of this $coll,
+    *           going right to left with the start value `z` on the right:
+    *           {{{
+    *             op(x_1, op(x_2, ... op(x_n, z)...))
+    *           }}}
+    *           where `x,,1,,, ..., x,,n,,` are the elements of this $coll.
+    *           Returns `z` if this $coll is empty.
+    */
   def foldRight[B](z: B)(op: (A, B) => B): B = iterator().foldRight(z)(op)
 
   @deprecated("Use foldLeft instead of /:", "2.13.0")
@@ -231,10 +275,19 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
    */
   def reduceRightOption[B >: A](op: (A, B) => B): Option[B] = iterator().reduceRightOption(op)
 
-  /** Is the collection empty? */
+  /** Tests whether the $coll is empty.
+    *
+    *  Note: Implementations in subclasses that are not repeatedly traversable must take
+    *  care not to consume any elements when `isEmpty` is called.
+    *
+    *  @return    `true` if the $coll contains no elements, `false` otherwise.
+    */
   def isEmpty: Boolean = !iterator().hasNext
 
-  /** Is the collection not empty? */
+  /** Tests whether the $coll is not empty.
+    *
+    *  @return    `true` if the $coll contains at least one element, `false` otherwise.
+    */
   def nonEmpty: Boolean = iterator().hasNext
 
   /** Selects the first element of this $coll.
@@ -281,13 +334,20 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
   @deprecated("Use .knownSize >=0 instead of .hasDefiniteSize", "2.13.0")
   @`inline` final def hasDefiniteSize = knownSize >= 0
 
-  /** The number of elements in this collection. Does not terminate for
-    *  infinite collections.
+  /** The size of this $coll.
+    *
+    *  $willNotTerminateInf
+    *
+    *  @return    the number of elements in this $coll.
     */
   def size: Int = if (knownSize >= 0) knownSize else iterator().length
 
-  /** A view representing the elements of this collection. */
+  /** A view over the elements of this collection. */
   def view: View[A] = View.fromIteratorProvider(() => iterator())
+
+  /** A view over a slice of the elements of this collection. */
+  @deprecated("Use .view.slice(from, until) instead of .view(from, until)", "2.13.0")
+  @`inline` final def view(from: Int, until: Int): View[A] = view.slice(from, until)
 
   /** Given a collection factory `factory`, convert this collection to the appropriate
     * representation for the current element type `A`. Example uses:
@@ -310,6 +370,15 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
   def toSeq: immutable.Seq[A] = immutable.Seq.from(this)
 
   def toIndexedSeq: immutable.IndexedSeq[A] = immutable.IndexedSeq.from(this)
+
+  @deprecated("Use LazyList.from(it) instead of it.toStream", "2.13.0")
+  @`inline` final def toStream: immutable.LazyList[A] = immutable.LazyList.from(this)
+
+  @deprecated("Use ArrayBuffer.from(it) instead of it.toBuffer", "2.13.0")
+  @`inline` final def toBuffer[B >: A]: mutable.Buffer[B] = mutable.ArrayBuffer.from(this)
+
+  @deprecated("Use .iterator() instead of .toIterator", "2.13.0")
+  @`inline` final def toIterator: Iterator[A] = iterator()
 
   /** Convert collection to array. */
   def toArray[B >: A: ClassTag]: Array[B] =
@@ -348,7 +417,20 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
   @deprecated("Use className instead of stringPrefix", "2.13.0")
   @`inline` final def stringPrefix: String = className
 
-  /** A string showing all elements of this collection, separated by string `sep`. */
+  /** Displays all elements of this $coll in a string using start, end, and
+    *  separator strings.
+    *
+    *  @param start the starting string.
+    *  @param sep   the separator string.
+    *  @param end   the ending string.
+    *  @return      a string representation of this $coll. The resulting string
+    *               begins with the string `start` and ends with the string
+    *               `end`. Inside, the string representations (w.r.t. the method
+    *               `toString`) of all elements of this $coll are separated by
+    *               the string `sep`.
+    *
+    *  @example  `List(1, 2, 3).mkString("(", "; ", ")") = "(1; 2; 3)"`
+    */
   def mkString(start: String, sep: String, end: String): String = {
     var first: Boolean = true
     val b = new StringBuilder()
@@ -362,8 +444,24 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
     b.result()
   }
 
+  /** Displays all elements of this $coll in a string using a separator string.
+    *
+    *  @param sep   the separator string.
+    *  @return      a string representation of this $coll. In the resulting string
+    *               the string representations (w.r.t. the method `toString`)
+    *               of all elements of this $coll are separated by the string `sep`.
+    *
+    *  @example  `List(1, 2, 3).mkString("|") = "1|2|3"`
+    */
   def mkString(sep: String): String = mkString("", sep, "")
 
+  /** Displays all elements of this $coll in a string.
+    *
+    *  @return a string representation of this $coll. In the resulting string
+    *          the string representations (w.r.t. the method `toString`)
+    *          of all elements of this $coll follow each other without any
+    *          separator string.
+    */
   def mkString: String = mkString("")
 
   override def toString = mkString(className + "(", ", ", ")")
@@ -866,12 +964,78 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
     */
   def map[B](f: A => B): CC[B] = fromIterable(View.Map(toIterable, f))
 
-  /** Flatmap */
+  /** Builds a new collection by applying a function to all elements of this $coll
+    *  and using the elements of the resulting collections.
+    *
+    *    For example:
+    *
+    *    {{{
+    *      def getWords(lines: Seq[String]): Seq[String] = lines flatMap (line => line split "\\W+")
+    *    }}}
+    *
+    *    The type of the resulting collection is guided by the static type of $coll. This might
+    *    cause unexpected results sometimes. For example:
+    *
+    *    {{{
+    *      // lettersOf will return a Seq[Char] of likely repeated letters, instead of a Set
+    *      def lettersOf(words: Seq[String]) = words flatMap (word => word.toSet)
+    *
+    *      // lettersOf will return a Set[Char], not a Seq
+    *      def lettersOf(words: Seq[String]) = words.toSet flatMap (word => word.toSeq)
+    *
+    *      // xs will be an Iterable[Int]
+    *      val xs = Map("a" -> List(11,111), "b" -> List(22,222)).flatMap(_._2)
+    *
+    *      // ys will be a Map[Int, Int]
+    *      val ys = Map("a" -> List(1 -> 11,1 -> 111), "b" -> List(2 -> 22,2 -> 222)).flatMap(_._2)
+    *    }}}
+    *
+    *  @param f      the function to apply to each element.
+    *  @tparam B     the element type of the returned collection.
+    *  @return       a new $coll resulting from applying the given collection-valued function
+    *                `f` to each element of this $coll and concatenating the results.
+    */
   def flatMap[B](f: A => IterableOnce[B]): CC[B] = fromIterable(View.FlatMap(toIterable, f))
 
-  def flatten[B](implicit ev: A => IterableOnce[B]): CC[B] =
-    fromIterable(View.FlatMap(toIterable, ev))
+  /** Converts this $coll of traversable collections into
+    *  a $coll formed by the elements of these traversable
+    *  collections.
+    *
+    *    The resulting collection's type will be guided by the
+    *    type of $coll. For example:
+    *
+    *    {{{
+    *    val xs = List(
+    *               Set(1, 2, 3),
+    *               Set(1, 2, 3)
+    *             ).flatten
+    *    // xs == List(1, 2, 3, 1, 2, 3)
+    *
+    *    val ys = Set(
+    *               List(1, 2, 3),
+    *               List(3, 2, 1)
+    *             ).flatten
+    *    // ys == Set(1, 2, 3)
+    *    }}}
+    *
+    *  @tparam B the type of the elements of each traversable collection.
+    *  @param asIterable an implicit conversion which asserts that the element
+    *          type of this $coll is a `GenTraversable`.
+    *  @return a new $coll resulting from concatenating all element ${coll}s.
+    *
+    */
+  def flatten[B](implicit asIterable: A => IterableOnce[B]): CC[B] =
+    fromIterable(View.FlatMap(toIterable, asIterable))
 
+  /** Builds a new collection by applying a partial function to all elements of this $coll
+    *  on which the function is defined.
+    *
+    *  @param pf     the partial function which filters and maps the $coll.
+    *  @tparam B     the element type of the returned collection.
+    *  @return       a new $coll resulting from applying the given partial function
+    *                `pf` to each element on which it is defined and collecting the results.
+    *                The order of the elements is preserved.
+    */
   def collect[B](pf: PartialFunction[A, B]): CC[B] =
     flatMap { a =>
       if (pf.isDefinedAt(a)) View.Single(pf(a))
@@ -889,18 +1053,18 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
     *              value for which it is defined, or `None` if none exists.
     *  @example    `Seq("a", 1, 5L).collectFirst({ case x: Int => x*10 }) = Some(10)`
     */
-  def collectFirst[B](pf: PartialFunction[A, B]): Option[B] = {
-    val i: Iterator[A] = iterator()
-    // Presumably the fastest way to get in and out of a partial function is for a sentinel function to return itself
-    // (Tested to be lower-overhead than runWith.  Would be better yet to not need to (formally) allocate it)
-    val sentinel: scala.Function1[A, Any] = new scala.runtime.AbstractFunction1[A, Any]{ def apply(a: A) = this }
-    while (i.hasNext) {
-      val x = pf.applyOrElse(i.next(), sentinel)
-      if (x.asInstanceOf[AnyRef] ne sentinel) return Some(x.asInstanceOf[B])
-    }
-    None
-  }
+  def collectFirst[B](pf: PartialFunction[A, B]): Option[B] =
+    iterator().collectFirst(pf)
 
+  /** Returns a new $coll containing the elements from the left hand operand followed by the elements from the
+    *  right hand operand. The element type of the $coll is the most specific superclass encompassing
+    *  the element types of the two operands.
+    *
+    *  @param suffix   the traversable to append.
+    *  @tparam B     the element type of the returned collection.
+    *  @return       a new $coll which contains all elements
+    *                of this $coll followed by all elements of `suffix`.
+    */
   def concat[B >: A](suffix: Iterable[B]): CC[B] = fromIterable(View.Concat(toIterable, suffix))
 
   /** Alias for `concat` */
@@ -927,6 +1091,22 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
     */
   def zipWithIndex: CC[(A @uncheckedVariance, Int)] = fromIterable(View.ZipWithIndex(toIterable))
 
+  /** Returns a $coll formed from this $coll and another iterable collection
+    *  by combining corresponding elements in pairs.
+    *  If one of the two collections is shorter than the other,
+    *  placeholder elements are used to extend the shorter collection to the length of the longer.
+    *
+    *  @param that     the iterable providing the second half of each result pair
+    *  @param thisElem the element to be used to fill up the result if this $coll is shorter than `that`.
+    *  @param thatElem the element to be used to fill up the result if `that` is shorter than this $coll.
+    *  @return        a new collection of type `That` containing pairs consisting of
+    *                 corresponding elements of this $coll and `that`. The length
+    *                 of the returned collection is the maximum of the lengths of this $coll and `that`.
+    *                 If this $coll is shorter than `that`, `thisElem` values are used to pad the result.
+    *                 If `that` is shorter than this $coll, `thatElem` values are used to pad the result.
+    */
+  def zipAll[A1 >: A, B](that: Iterable[B], thisElem: A1, thatElem: B): CC[(A1, B)] = fromIterable(View.ZipAll(toIterable, that, thisElem, thatElem))
+
   /** Converts this $coll of pairs into two collections of the first and second
     *  half of each pair.
     *
@@ -946,9 +1126,33 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] {
     *  @return       a pair of ${coll}s, containing the first, respectively second
     *                half of each element pair of this $coll.
     */
-  def unzip[A1, A2](implicit asPair: A <:< (A1, A2)): (CC[A1], CC[A2]) = {
+  def unzip[A1, A2](implicit asPair: A => (A1, A2)): (CC[A1], CC[A2]) = {
     val unzipped = View.Unzip(toIterable)
     (fromIterable(unzipped.first), fromIterable(unzipped.second))
+  }
+
+  /** Iterates over the tails of this $coll. The first value will be this
+    *  $coll and the final one will be an empty $coll, with the intervening
+    *  values the results of successive applications of `tail`.
+    *
+    *  @return   an iterator over all the tails of this $coll
+    *  @example  `List(1,2,3).tails = Iterator(List(1,2,3), List(2,3), List(3), Nil)`
+    */
+  def tails: Iterator[C] = iterateUntilEmpty(_.tail)
+
+  /** Iterates over the inits of this $coll. The first value will be this
+    *  $coll and the final one will be an empty $coll, with the intervening
+    *  values the results of successive applications of `init`.
+    *
+    *  @return  an iterator over all the inits of this $coll
+    *  @example  `List(1,2,3).inits = Iterator(List(1,2,3), List(1,2), List(1), Nil)`
+    */
+  def inits: Iterator[C] = iterateUntilEmpty(_.init)
+
+  // A helper for tails and inits.
+  private[this] def iterateUntilEmpty(f: Iterable[A] => Iterable[A]): Iterator[C] = {
+    val it = Iterator.iterate(toIterable)(f).takeWhile(x => !x.isEmpty)
+    (it ++ Iterator(Iterable.empty)).map(fromSpecificIterable)
   }
 }
 

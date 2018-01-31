@@ -10,7 +10,9 @@ import scala.{Boolean, Int, Option, Ordering, PartialFunction, Serializable, `in
 /** Base type of sorted sets */
 trait SortedMap[K, +V]
   extends Map[K, V]
-    with SortedMapOps[K, V, SortedMap, SortedMap[K, V]]
+    with SortedMapOps[K, V, SortedMap, SortedMap[K, V]] {
+  def unsorted: Map[K, V] = this
+}
 
 trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _], +C <: SortedMapOps[K, V, CC, C]]
   extends MapOps[K, V, Map, C]
@@ -19,6 +21,8 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
   def sortedMapFactory: SortedMapFactory[CC]
 
   protected[this] def sortedMapFromIterable[K2, V2](it: collection.Iterable[(K2, V2)])(implicit ordering: Ordering[K2]): CC[K2, V2]
+
+  def unsorted: Map[K, V]
 
   /**
     * Creates an iterator over all the key/value pairs
@@ -124,12 +128,33 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
   }
 
   // And finally, we add new overloads taking an ordering
+  /** Builds a new sorted map by applying a function to all elements of this $coll.
+    *
+    *  @param f      the function to apply to each element.
+    *  @return       a new $coll resulting from applying the given function
+    *                `f` to each element of this $coll and collecting the results.
+    */
   def map[K2, V2](f: ((K, V)) => (K2, V2))(implicit ordering: Ordering[K2]): CC[K2, V2] =
     sortedMapFromIterable(View.Map[(K, V), (K2, V2)](toIterable, f))
 
+  /** Builds a new sorted map by applying a function to all elements of this $coll
+    *  and using the elements of the resulting collections.
+    *
+    *  @param f      the function to apply to each element.
+    *  @return       a new $coll resulting from applying the given collection-valued function
+    *                `f` to each element of this $coll and concatenating the results.
+    */
   def flatMap[K2, V2](f: ((K, V)) => IterableOnce[(K2, V2)])(implicit ordering: Ordering[K2]): CC[K2, V2] =
     sortedMapFromIterable(View.FlatMap(toIterable, f))
 
+  /** Builds a new sorted map by applying a partial function to all elements of this $coll
+    *  on which the function is defined.
+    *
+    *  @param pf     the partial function which filters and maps the $coll.
+    *  @return       a new $coll resulting from applying the given partial function
+    *                `pf` to each element on which it is defined and collecting the results.
+    *                The order of the elements is preserved.
+    */
   def collect[K2, V2](pf: PartialFunction[(K, V), (K2, V2)])(implicit ordering: Ordering[K2]): CC[K2, V2] =
     flatMap { (kv: (K, V)) =>
       if (pf.isDefinedAt(kv)) View.Single(pf(kv))

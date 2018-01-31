@@ -27,7 +27,7 @@ import strawman.collection.mutable.{Builder, ImmutableBuilder}
   *  @define mayNotTerminateInf
   *  @define willNotTerminateInf
   */
-sealed trait HashMap[K, +V]
+sealed abstract class HashMap[K, +V]
   extends Map[K, V]
     with MapOps[K, V, HashMap, HashMap[K, V]]
     with StrictOptimizedIterableOps[(K, V), Iterable, HashMap[K, V]]
@@ -122,7 +122,7 @@ object HashMap extends MapFactory[HashMap] {
 
   def newBuilder[K, V](): Builder[(K, V), HashMap[K, V]] =
     new ImmutableBuilder[(K, V), HashMap[K, V]](empty) {
-      def add(elem: (K, V)): this.type = { elems = elems + elem; this }
+      def addOne(elem: (K, V)): this.type = { elems = elems + elem; this }
     }
 
   private[collection] abstract class Merger[A, B] {

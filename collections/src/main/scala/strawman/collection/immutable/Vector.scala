@@ -80,6 +80,8 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
 
   def length: Int = endIndex - startIndex
 
+  override def lengthCompare(len: Int): Int = length - len
+
   private[collection] def initIterator[B >: A](s: VectorIterator[B]): Unit = {
     s.initFrom(this)
     if (dirty) s.stabilize(focus)
@@ -90,16 +92,6 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     val s = new VectorIterator[A](startIndex, endIndex)
     initIterator(s)
     s
-  }
-
-  override def reverseIterator(): Iterator[A] = new Iterator[A] {
-    private var i = self.length
-    def hasNext: Boolean = 0 < i
-    def next(): A =
-      if (0 < i) {
-        i -= 1
-        self(i)
-      } else Iterator.empty.next()
   }
 
   // Ideally, clients will inline calls to map all the way down, including the iterator/builder methods.
@@ -570,10 +562,12 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     s.cleanRightEdge(cutIndex - shift)
     s
   }
+
+  override def toVector: Vector[A] = this
 }
 
 class VectorIterator[+A](_startIndex: Int, endIndex: Int)
-  extends Iterator[A]
+  extends AbstractIterator[A]
     with VectorPointer[A @uncheckedVariance] {
 
   private var blockIndex: Int = _startIndex & ~31
@@ -609,6 +603,8 @@ class VectorIterator[+A](_startIndex: Int, endIndex: Int)
 
   private[collection] def remainingElementCount: Int = (endIndex - (blockIndex + lo)) max 0
 
+  override def knownSize: Int = remainingElementCount
+
   /** Creates a new vector which consists of elements remaining in this iterator.
    *  Such a vector can then be split into several vectors using methods like `take` and `drop`.
    */
@@ -631,7 +627,7 @@ final class VectorBuilder[A]() extends ReusableBuilder[A, Vector[A]] with Vector
   private var blockIndex = 0
   private var lo = 0
 
-  def add(elem: A): this.type = {
+  def addOne(elem: A): this.type = {
     if (lo >= display0.length) {
       val newBlockIndex = blockIndex + 32
       gotoNextBlockStartWritable(newBlockIndex, blockIndex ^ newBlockIndex)
@@ -642,8 +638,6 @@ final class VectorBuilder[A]() extends ReusableBuilder[A, Vector[A]] with Vector
     lo += 1
     this
   }
-
-//  override def addAll(xs: IterableOnce[A]): this.type = super.addAll(xs)
 
   def result(): Vector[A] = {
     val size = blockIndex + lo

@@ -11,7 +11,25 @@ import scala.annotation.tailrec
 import java.lang.IndexOutOfBoundsException
 import scala.Predef.{assert, intWrapper}
 
-/** Concrete collection type: ListBuffer */
+/** A `Buffer` implementation backed by a list. It provides constant time
+  *  prepend and append. Most other operations are linear.
+  *
+  *  @author  Matthias Zenger
+  *  @author  Martin Odersky
+  *  @version 2.8
+  *  @since   1
+  *  @see [[http://docs.scala-lang.org/overviews/collections/concrete-mutable-collection-classes.html#list_buffers "Scala's Collection Library overview"]]
+  *  section on `List Buffers` for more information.
+  *
+  *  @tparam A    the type of this list buffer's elements.
+  *
+  *  @define Coll `ListBuffer`
+  *  @define coll list buffer
+  *  @define orderDependent
+  *  @define orderDependentFold
+  *  @define mayNotTerminateInf
+  *  @define willNotTerminateInf
+  */
 @SerialVersionUID(3419063961353022662L)
 class ListBuffer[A]
   extends Buffer[A]
@@ -53,7 +71,7 @@ class ListBuffer[A]
 
   private def ensureUnaliased() = if (aliased) copyElems()
 
-  /** Convert to list; avoids copying where possible. */
+  // Avoids copying where possible.
   override def toList: List[A] = {
     aliased = nonEmpty
     first
@@ -76,9 +94,12 @@ class ListBuffer[A]
 
   def clear(): Unit = {
     first = Nil
+    len = 0
+    last0 = null
+    aliased = false
   }
 
-  def add(elem: A): this.type = {
+  def addOne(elem: A): this.type = {
     ensureUnaliased()
     val last1 = (elem :: Nil).asInstanceOf[::[A]]
     if (len == 0) first = last1 else last0.next = last1
@@ -87,7 +108,7 @@ class ListBuffer[A]
     this
   }
 
-  def subtract(elem: A): ListBuffer.this.type = {
+  def subtractOne(elem: A): this.type = {
     ensureUnaliased()
     if (isEmpty) {}
     else if (first.head == elem) {

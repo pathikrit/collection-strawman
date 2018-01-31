@@ -5,6 +5,7 @@ package immutable
 import strawman.collection.mutable.Builder
 
 import scala.{Any, Boolean, `inline`, Int, None, NoSuchElementException, Nothing, Option, Some, Serializable, Unit}
+import scala.Predef.<:<
 
 /** Base type of immutable Maps */
 trait Map[K, +V]
@@ -33,6 +34,9 @@ trait Map[K, +V]
     *  @return      a wrapper of the map with a default value
     */
   def withDefaultValue[V1 >: V](d: V1): Map[K, V1] = new Map.WithDefault[K, V1](this, x => d)
+
+  override final def toMap[K2, V2](implicit ev: (K, V) <:< (K2, V2)): Map[K2, V2] = this.asInstanceOf[Map[K2, V2]]
+
 }
 
 /** Base trait of immutable Maps implementations
@@ -87,6 +91,14 @@ trait MapOps[K, +V, +CC[X, +Y] <: MapOps[X, Y, CC, _], +C <: MapOps[K, V, CC, C]
     * @return A new map with the new binding added to this map.
     */
   /*@`inline` final*/ def + [V1 >: V](kv: (K, V1)): CC[K, V1] = updated(kv._1, kv._2)
+
+  /** This function transforms all the values of mappings contained
+    *  in this map with function `f`.
+    *
+    *  @param f A function over keys and values
+    *  @return  the updated map
+    */
+  def transform[W](f: (K, V) => W): CC[K, W] = map { case (k, v) => (k, f(k, v)) }
 
   override def concat [V1 >: V](that: collection.Iterable[(K, V1)]): CC[K, V1] = {
     var result: CC[K, V1] = coll

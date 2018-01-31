@@ -10,8 +10,7 @@ import scala.{Boolean, None, Option, Some, Unit, `inline`, deprecated}
 trait Map[K, V]
   extends Iterable[(K, V)]
     with collection.Map[K, V]
-    with MapOps[K, V, Map, Map[K, V]]
-    with Shrinkable[K] {
+    with MapOps[K, V, Map, Map[K, V]] {
 
   /*
   //TODO consider keeping `remove` because it returns the removed entry
@@ -53,9 +52,11 @@ trait Map[K, V]
 trait MapOps[K, V, +CC[X, Y] <: MapOps[X, Y, CC, _], +C <: MapOps[K, V, CC, C]]
   extends IterableOps[(K, V), Iterable, C]
     with collection.MapOps[K, V, CC, C]
+    with Cloneable[C]
+    with Growable[(K, V)]
     with Shrinkable[K] {
 
-  def iterableFactory = Iterable
+  def iterableFactory: IterableFactory[Iterable] = Iterable
 
   /** Adds a new key/value pair to this map and optionally returns previously bound value.
     *  If the map already contains a
@@ -153,6 +154,14 @@ trait MapOps[K, V, +CC[X, Y] <: MapOps[X, Y, CC, _], +C <: MapOps[K, V, CC, C]]
       coll -= elem
     this
   }
+
+  /** Retains only those mappings for which the predicate
+    *  `p` returns `true`.
+    *
+    * @param p  The test predicate
+    */
+  @deprecated("Use .filterInPlace instead of .retain", "2.13.0")
+  @`inline` final def retain(p: (K, V) => Boolean): this.type = filterInPlace(p.tupled)
 }
 
 /**
@@ -180,8 +189,8 @@ object Map extends MapFactory.Delegate[Map](HashMap) {
     override def empty = new WithDefault(underlying.empty, d)
 
     def clear(): Unit = underlying.clear()
-    def add(elem: (K, V)): this.type = { underlying.add(elem); this }
-    def subtract(elem: K): this.type = { underlying.subtract(elem); this }
+    def addOne(elem: (K, V)): this.type = { underlying.addOne(elem); this }
+    def subtractOne(elem: K): this.type = { underlying.subtractOne(elem); this }
     override def put(key: K, value: V): Option[V] = underlying.put(key, value)
     override def update(key: K, value: V): Unit = underlying.update(key, value)
     override def remove(key: K): Option[V] = underlying.remove(key)
